@@ -22,7 +22,7 @@ export const createCssFunction = (config: StitchesConfig, sheet: SheetGroup): Cs
 	createCssFunctionMap(config, (): CssFunction => {
 		const _css = (args: CssArg[], componentConfig: ComponentConfig = {}): CssComponentFunction => {
 			const internals: ComponentInternals = {
-				type: null!,
+				type: null,
 				composers: new Set<ComposerTuple>(),
 			}
 
@@ -53,10 +53,10 @@ export const createCssFunction = (config: StitchesConfig, sheet: SheetGroup): Cs
 				}
 			}
 
-			if (internals.type == null) internals.type = 'span'
+			const type = internals.type ?? 'span'
 			if (!internals.composers.size) internals.composers.add(['PJLV', {}, [], [], {}, []])
 
-			return createRenderer(config, internals, sheet, componentConfig)
+			return createRenderer(config, { type, composers: internals.composers }, sheet, componentConfig)
 		}
 
 		const css: CssFunction = Object.assign((...args: CssArg[]) => _css(args), {
@@ -138,7 +138,9 @@ interface CssProps {
 	[name: string]: unknown
 }
 
-const createRenderer = (config: StitchesConfig, internals: ComponentInternals, sheet: SheetGroup, { shouldForwardStitchesProp }: ComponentConfig): CssComponentFunction => {
+type ResolvedInternals = { type: ComponentType; composers: Set<ComposerTuple> }
+
+const createRenderer = (config: StitchesConfig, internals: ResolvedInternals, sheet: SheetGroup, { shouldForwardStitchesProp }: ComponentConfig): CssComponentFunction => {
 	const [baseClassName, baseClassNames, prefilledVariants, undefinedVariants] = getPreparedDataFromComposers(internals.composers)
 
 	const hasReactType = typeof internals.type === 'function' || (typeof internals.type === 'object' && !!internals.type.$$typeof)
@@ -305,11 +307,12 @@ type ResolvedVariant = [string, CSSObject, boolean]
 const getTargetVariantsToAdd = (targetVariants: VariantDef[], variantProps: Record<string, string | Record<string, string>>, media: Record<string, string>, isCompoundVariant?: boolean): (ResolvedVariant[] | undefined)[] => {
 	const targetVariantsToAdd: (ResolvedVariant[] | undefined)[] = []
 
-	targetVariants: for (let [vMatch, vStyle, vEmpty] of targetVariants) {
+	targetVariants: for (const [vMatch, initialVStyle, vEmpty] of targetVariants) {
 		if (vEmpty) continue
 
+		let vStyle = initialVStyle
 		let vOrder = 0
-		let vName: string = ''
+		let vName = ''
 
 		let isResponsive = false
 		for (vName in vMatch) {
@@ -344,7 +347,8 @@ const getTargetVariantsToAdd = (targetVariants: VariantDef[], variantProps: Reco
 				if (!didMatch) continue targetVariants
 			} else continue targetVariants
 		}
-		;(targetVariantsToAdd[vOrder] = targetVariantsToAdd[vOrder] || []).push([isCompoundVariant ? `cv` : `${vName}-${vMatch[vName]}`, vStyle, isResponsive])
+		const bucket = (targetVariantsToAdd[vOrder] = targetVariantsToAdd[vOrder] || [])
+		bucket.push([isCompoundVariant ? `cv` : `${vName}-${vMatch[vName]}`, vStyle, isResponsive])
 	}
 
 	return targetVariantsToAdd

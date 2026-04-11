@@ -101,7 +101,7 @@ export type ComponentType = string | ((...args: never[]) => unknown) | { $$typeo
 
 /** Component internals attached via the internal Symbol */
 export interface ComponentInternals {
-	type: ComponentType
+	type: ComponentType | null
 	composers: Set<ComposerTuple>
 }
 

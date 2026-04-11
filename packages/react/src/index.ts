@@ -13,4 +13,4 @@ export function createTheme(a: string | ThemeDefinition, b?: ThemeDefinition): T
 export const globalCss = (...styles: CSSObject[]) => getCachedConfig().globalCss(...styles)
 export const keyframes = (style: CSSObject) => getCachedConfig().keyframes(style)
 export const css = (...args: (string | CssComponentFunction | CSSObject)[]) => getCachedConfig().css(...args)
-export const styled = (...args: (string | CssComponentFunction | CSSObject)[]) => getCachedConfig().styled!(...args)
+export const styled = (...args: (string | CssComponentFunction | CSSObject)[]) => getCachedConfig().styled(...args)

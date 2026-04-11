@@ -17,7 +17,7 @@ export const createGlobalCssFunction = (config: StitchesConfig, sheet: SheetGrou
 					for (let style of styles) {
 						style = (typeof style === 'object' && style) || {}
 
-						let uuid = toHash(style)
+						const uuid = toHash(style)
 
 						if (!sheet.rules.global.cache.has(uuid)) {
 							sheet.rules.global.cache.add(uuid)

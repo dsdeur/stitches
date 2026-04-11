@@ -178,6 +178,7 @@ export const createSheet = (root: (DocumentOrShadowRoot & Node) | null): SheetGr
 	return groupSheet
 }
 
+// eslint-disable-next-line @typescript-eslint/no-empty-function
 const noop = () => {}
 
 const addApplyToGroup = (group: RuleGroup): void => {

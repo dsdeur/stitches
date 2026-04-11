@@ -1,6 +1,6 @@
-import type { StitchesInstance } from '../../../core/src/types.ts'
+import type { ReactStitchesInstance } from '../createStitches.ts'
 import { createStitches } from '../createStitches.ts'
 
-let cachedConfig: StitchesInstance | undefined
+let cachedConfig: ReactStitchesInstance | undefined
 
-export const getCachedConfig = (): StitchesInstance => cachedConfig || (cachedConfig = createStitches())
+export const getCachedConfig = (): ReactStitchesInstance => cachedConfig || (cachedConfig = createStitches())
