@@ -76,7 +76,7 @@ export const build = async (packageUrl, opts) => {
 	const packageName = JSON.parse(await fs.readFile(packageJsonUrl, 'utf8')).name
 
 	if (!opts.only.length || opts.only.includes(packageName)) {
-		const targetPathname = new URL('index.js', initPackageUrl).pathname
+		const targetPathname = new URL('index.ts', initPackageUrl).pathname
 		const outputPathname = new URL('index.js', distPackageUrl).pathname
 
 		// Build ESM version

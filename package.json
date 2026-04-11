@@ -17,9 +17,9 @@
     "lint:pkg": "node .task/lint-pkg.js",
     "lint:tsc": "node .task/lint-tsc.js",
     "release": "node .task/release.js",
-    "test": "node .task/test.js",
-    "test:coverage": "node .task/test-coverage.js .task/test.js",
-    "test:watch": "node .task/test.js --watch"
+    "test": "tsx .task/test.js",
+    "test:coverage": "tsx .task/test-coverage.js .task/test.js",
+    "test:watch": "tsx .task/test.js --watch"
   },
   "workspaces": [
     "packages/core",
@@ -51,7 +51,7 @@
     "react": "17.0.2",
     "react-test-renderer": "17.0.2",
     "terser": "5.9.0",
-    "typescript": "4.8.2"
+    "typescript": "6.0.2"
   },
   "browserslist": [
     "last 1 chrome versions",
@@ -152,5 +152,9 @@
       }
     ]
   },
-  "private": true
+  "private": true,
+  "devDependencies": {
+    "prettier": "3.8.2",
+    "tsx": "4.21.0"
+  }
 }

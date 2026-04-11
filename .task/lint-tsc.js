@@ -9,7 +9,7 @@ export const lint = async (packageUrl, opts) => {
 
 	const packageJsonUrl = new URL(`package.json`, packageUrl)
 	const packageName = JSON.parse(await fs.readFile(packageJsonUrl, 'utf8')).name
-	const packageTsUrl = new URL(`types/index.d.ts`, packageUrl)
+	const packageTsUrl = new URL(`src/index.ts`, packageUrl)
 
 	if (!opts.only.length || opts.only.includes(packageName)) {
 		console.log(underline(bold(packageName)))
