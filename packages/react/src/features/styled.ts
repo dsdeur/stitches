@@ -1,6 +1,6 @@
 import React from 'react'
 
-import type { StitchesConfig, SheetGroup, CssComponentFunction, ComponentInternals, ComponentConfig, CSSObject, CssFunction, CssInvocation } from '../../../core/src/types.ts'
+import type { StitchesConfig, SheetGroup, ComponentInternals, ComponentConfig, CssFunction, CssInvocation, CssArg } from '../../../core/src/types.ts'
 import { internal } from '../../../core/src/utility/internal.ts'
 import { createMemo } from '../../../core/src/utility/createMemo.ts'
 
@@ -8,12 +8,13 @@ import { createCssFunction } from '../../../core/src/features/css.ts'
 
 const createCssFunctionMap = createMemo()
 
-type StyledComponent = React.ForwardRefExoticComponent<Record<string, unknown>> & {
+export type StyledComponent = React.ForwardRefExoticComponent<Record<string, unknown>> & {
 	className: string
 	selector: string
+	/** The forwardRef render function — present at runtime but not in React's types */
+	render?: (props?: Record<string, unknown>, ref?: unknown) => React.ReactElement | null
 } & { [K in typeof internal]: ComponentInternals }
 
-type CssArg = string | CssComponentFunction | CSSObject
 
 /** Returns a function that applies component styles. */
 export const createStyledFunction = ({ config, sheet }: { config: StitchesConfig; sheet: SheetGroup }) =>
@@ -57,7 +58,7 @@ export const createStyledFunction = ({ config, sheet }: { config: StitchesConfig
 		const styled = (...args: CssArg[]) => _styled(args)
 
 		styled.withConfig =
-			(componentConfig: ComponentConfig) =>
+			(componentConfig?: ComponentConfig) =>
 			(...args: CssArg[]) => {
 				const cssWithConfig = cssFunction.withConfig(componentConfig)
 				return _styled(args, cssWithConfig, componentConfig)

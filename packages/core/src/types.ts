@@ -165,11 +165,17 @@ export type CreateThemeFunction = {
 // Top-level function signatures
 // ---------------------------------------------------------------------------
 
+/** Any composable component — has internal symbol with component internals */
+export type Composable = { [K in typeof internal]: ComponentInternals }
+
+/** Valid arg to css()/styled(): a tag name, an existing component, a style object, or a React-like component */
+export type CssArg = string | Composable | CSSObject | ((...args: never[]) => unknown) | { $$typeof: symbol }
+
 /** The bare css invocation signature */
-export type CssInvocation = (...args: (string | CssComponentFunction | CSSObject)[]) => CssComponentFunction
+export type CssInvocation = (...args: CssArg[]) => CssComponentFunction
 
 export type CssFunction = CssInvocation & {
-	withConfig: (config: ComponentConfig) => CssInvocation
+	withConfig: (config?: ComponentConfig) => CssInvocation
 }
 
 export type GlobalCssFunction = {
@@ -180,8 +186,19 @@ export type KeyframesFunction = {
 	(style: CSSObject): { (): string; name: string; toString: () => string }
 }
 
+/** Styled component returned by styled() — also a React ForwardRef component at runtime */
+export interface StyledComponentResult {
+	className: string
+	selector: string
+	displayName?: string
+	toString: () => string
+}
+
 /** Styled function type (react only) */
-export type StyledFunction = (...args: (string | CssComponentFunction | CSSObject)[]) => unknown
+export type StyledFunction = {
+	(...args: CssArg[]): StyledComponentResult
+	withConfig: (config?: ComponentConfig) => (...args: CssArg[]) => StyledComponentResult
+}
 
 // ---------------------------------------------------------------------------
 // The return value of createStitches
@@ -199,5 +216,4 @@ export interface StitchesInstance {
 	prefix: string
 	getCssText: () => string
 	toString: () => string
-	styled?: StyledFunction
 }

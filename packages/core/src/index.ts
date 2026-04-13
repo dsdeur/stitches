@@ -1,5 +1,5 @@
 import { getCachedConfig } from './utility/getCachedConfig.ts'
-import type { CSSObject, CssComponentFunction, ThemeDefinition, ThemeResult } from './types.ts'
+import type { CSSObject, CssArg, ThemeDefinition, ThemeResult } from './types.ts'
 
 export { createStitches } from './createStitches.ts'
 export { defaultThemeMap } from './default/defaultThemeMap.ts'
@@ -12,4 +12,4 @@ export function createTheme(a: string | ThemeDefinition, b?: ThemeDefinition): T
 
 export const globalCss = (...styles: CSSObject[]) => getCachedConfig().globalCss(...styles)
 export const keyframes = (style: CSSObject) => getCachedConfig().keyframes(style)
-export const css = (...args: (string | CssComponentFunction | CSSObject)[]) => getCachedConfig().css(...args)
+export const css = (...args: CssArg[]) => getCachedConfig().css(...args)

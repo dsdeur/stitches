@@ -1,3 +1,4 @@
+import * as React from 'react'
 import { createStitches, PropertyValue, CSS } from '../types/index'
 
 const config = {

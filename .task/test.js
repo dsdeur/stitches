@@ -13,8 +13,9 @@ const main = async (pkg, opts) => {
 	for (let file of await fs.readdir(pkg.to('tests/'))) {
 		file = pkg.to('tests/').to(file)
 
-		// filter non-js files
-		if (!file.endsWith('.js')) continue
+		// filter non-ts/js files and type-only tests
+		if (!file.endsWith('.ts') && !file.endsWith('.js')) continue
+		if (file.includes('.type-test.') || file.endsWith('.d.ts')) continue
 
 		// filter non-matching files
 		if (opts.only.length && !opts.only.some(name => file.includes(name))) continue

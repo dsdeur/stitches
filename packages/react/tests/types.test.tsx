@@ -1,8 +1,9 @@
 // core types.tests.ts
+import * as React from 'react'
 import * as Stitches from '../types/index'
 import { createStitches, FontFace } from '../types/index'
 
-const { css, globalCss, keyframes, styled, theme } = createStitches({
+const { globalCss, keyframes, styled } = createStitches({
 	utils: {
 		mx: (value: Stitches.PropertyValue<'marginLeft'>) => ({
 			marginLeft: value,
@@ -178,7 +179,7 @@ const StyledUnionComponent = styled(UnionComponent, {})
 void function Test() {
 	<>
 		<StyledUnionComponent type="single" collapsible />
-		{/* @ts-expect-error */}
+		{/* @ts-expect-error -- 'multiple' type should not allow collapsible */}
 		<StyledUnionComponent type="multiple" collapsible />
 	</>
 }
@@ -191,15 +192,15 @@ const fontFaceArray: FontFace[] = [
 		fontFamily: "Inter",
 		src: `url(file.woff2) format("woff2")`,
 		fontDisplay: "swap"
-	  }
-];
+	}
+]
 const styles = {
 	"@font-face": fontFaceArray,
 	body: {
-	  // Falbacking to a serif font so it's easier to see that the swap is hapenning
-	  fontFamily: "Inter, serif"
+		// Falbacking to a serif font so it's easier to see that the swap is hapenning
+		fontFamily: "Inter, serif"
 	}
-  };
+}
 void function Test() {
 	globalCss(styles)
 }

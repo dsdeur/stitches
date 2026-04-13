@@ -1,4 +1,19 @@
-import type { StitchesConfig, SheetGroup, ComposerTuple, ComponentInternals, RenderResult, InjectionDeferrer, CssComponentFunction, ComponentConfig, VariantDef, CSSObject, CssFunction, CssInvocation, ComponentType } from '../types.ts'
+import type {
+	StitchesConfig,
+	SheetGroup,
+	ComposerTuple,
+	ComponentInternals,
+	RenderResult,
+	InjectionDeferrer,
+	CssComponentFunction,
+	ComponentConfig,
+	VariantDef,
+	CSSObject,
+	CssFunction,
+	CssInvocation,
+	ComponentType,
+	CssArg,
+} from '../types.ts'
 import { internal } from '../utility/internal.ts'
 import { createMemo } from '../utility/createMemo.ts'
 import { define } from '../utility/define.ts'
@@ -12,8 +27,6 @@ import { createRulesInjectionDeferrer } from '../sheet.ts'
 
 const createCssFunctionMap = createMemo()
 
-/** A css() arg can be a string, an existing component, or a style config object */
-type CssArg = string | CssComponentFunction | CSSObject
 
 const isCSSObject = (value: object): value is CSSObject => value.constructor === Object && !('$$typeof' in value)
 
@@ -61,7 +74,7 @@ export const createCssFunction = (config: StitchesConfig, sheet: SheetGroup): Cs
 
 		const css: CssFunction = Object.assign((...args: CssArg[]) => _css(args), {
 			withConfig:
-				(componentConfig: ComponentConfig): CssInvocation =>
+				(componentConfig?: ComponentConfig): CssInvocation =>
 				(...args: CssArg[]) =>
 					_css(args, componentConfig),
 		})
