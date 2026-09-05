@@ -28,7 +28,7 @@ export const createGlobalCssFunction = (config: StitchesConfig, sheet: SheetGrou
 
 								// wrap import in quotes as a convenience
 								for (let importValue of ([] as string[]).concat(style['@import'] as string | string[])) {
-									importValue = importValue.includes('"') || importValue.includes("'") ? importValue : `"${importValue}"`
+									importValue = importValue.includes('"') || importValue.includes("'") || importValue.startsWith('url(') ? importValue : `"${importValue}"`
 
 									sheet.sheet.insertRule(`@import ${importValue};`, importIndex++)
 								}

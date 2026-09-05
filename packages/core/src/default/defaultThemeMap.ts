@@ -82,6 +82,7 @@ export const defaultThemeMap: Record<string, string> = {
 
 	fontSize: fontSizes,
 
+	accentColor: colors,
 	background: colors,
 	backgroundColor: colors,
 	backgroundImage: colors,
@@ -96,6 +97,12 @@ export const defaultThemeMap: Record<string, string> = {
 	borderInline: colors,
 	borderInlineEnd: colors,
 	borderInlineStart: colors,
+	borderBlockColor: colors,
+	borderBlockStartColor: colors,
+	borderBlockEndColor: colors,
+	borderInlineColor: colors,
+	borderInlineStartColor: colors,
+	borderInlineEndColor: colors,
 	borderLeft: colors,
 	borderLeftColor: colors,
 	borderRight: colors,

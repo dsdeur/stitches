@@ -134,3 +134,15 @@ describe('Support @font-face', () => {
 		)
 	})
 })
+
+describe('Support @import with url()', () => {
+	test('Authors can define an @import rule using the url() form without it being quoted', () => {
+		const { globalCss, getCssText } = createStitches()
+
+		globalCss({
+			'@import': 'url(https://unpkg.com/sanitize.css)',
+		})()
+
+		expect(getCssText()).toBe('@import url(https://unpkg.com/sanitize.css);')
+	})
+})

@@ -1,5 +1,8 @@
 // Renders a fixture with every variant kind against a given core entry and prints class names + CSS.
-const { createStitches } = await import(process.argv[2])
+import { resolve } from "node:path"
+import { pathToFileURL } from "node:url"
+
+const { createStitches } = await import(pathToFileURL(resolve(process.argv[2])).href)
 const s = createStitches({
 	media: { bp1: '(min-width: 640px)', bp2: '(min-width: 1024px)' },
 	theme: { colors: { red: 'tomato', blue: 'dodgerblue' }, space: { 1: '4px', 2: '8px' } },
