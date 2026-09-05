@@ -142,13 +142,15 @@ export const createSheet = (root: (DocumentOrShadowRoot & Node) | null): SheetGr
 			if (!root) {
 				groupSheet.sheet = createMockRule('', 'text/css')
 			} else {
-				const styleEl = document.createElement('style')
+				// A Document owns itself; a ShadowRoot (or element) points at its document. No global `document` or `Document` is used, so a custom root works outside a browser too.
+				const ownerDocument = isDocument(root) ? root : root.ownerDocument
+				const styleEl = ownerDocument ? ownerDocument.createElement('style') : null
 				const nonce = getNonce()
-				if (nonce) {
+				if (nonce && styleEl) {
 					styleEl.setAttribute('nonce', nonce)
 				}
-				const parent = root instanceof Document ? root.head : root
-				const appendedSheet = parent.appendChild(styleEl).sheet
+				const parent = isDocument(root) ? root.head : root
+				const appendedSheet = styleEl ? parent.appendChild(styleEl).sheet : null
 				if (appendedSheet) {
 					groupSheet.sheet = appendedSheet
 				} else {
@@ -179,6 +181,9 @@ export const createSheet = (root: (DocumentOrShadowRoot & Node) | null): SheetGr
 }
 
 const noop = () => undefined
+
+/** Document nodes have nodeType 9; this avoids referencing the `Document` global, which does not exist outside browsers. */
+const isDocument = (node: DocumentOrShadowRoot & Node): node is Document => node.nodeType === 9
 
 const addApplyToGroup = (group: RuleGroup): void => {
 	const groupingRule = group.group

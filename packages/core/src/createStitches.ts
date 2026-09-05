@@ -10,51 +10,65 @@ import { createCreateThemeFunction } from './features/createTheme.ts'
 
 import { createSheet } from './sheet.ts'
 
-const createCssMap = createMemo()
+type SheetRoot = NonNullable<StitchesInit['root']>
+
+const createInstancesMap = createMemo()
 
 export const createStitches = (init?: StitchesInit): StitchesInstance => {
-	let didRun = false
+	const initConfig: StitchesInit = (typeof init === 'object' && init) || {}
 
-	const instance = createCssMap(init, (rawInit): StitchesInstance => {
-		didRun = true
+	// `root` is a DOM node, so it is cyclic and cannot be part of the serialized memo key.
+	// Instances are memoized on the rest of the config, then on the identity of the root.
+	const { root: initRoot, ...memoInit } = initConfig
+	const root: SheetRoot | null = 'root' in initConfig ? (initRoot ?? null) : (globalThis.document ?? null)
 
-		const initConfig: StitchesInit = (typeof rawInit === 'object' && rawInit) || {}
+	const instancesByRoot = createInstancesMap(memoInit, (): Map<SheetRoot | null, StitchesInstance> => new Map())
 
-		const prefix = initConfig.prefix ?? ''
-		const media = initConfig.media ?? {}
-		const root = 'root' in initConfig ? (initConfig.root ?? null) : (globalThis.document ?? null)
-		const theme = initConfig.theme ?? {}
-		const themeMap = initConfig.themeMap ?? { ...defaultThemeMap }
-		const utils = initConfig.utils ?? {}
+	const existing = instancesByRoot.get(root)
 
-		const config: StitchesConfig = { prefix, media, theme, themeMap, utils }
+	if (existing) {
+		existing.reset()
 
-		const sheet = createSheet(root)
+		return existing
+	}
 
-		const returnValue: StitchesInstance = {
-			css: createCssFunction(config, sheet),
-			globalCss: createGlobalCssFunction(config, sheet),
-			keyframes: createKeyframesFunction(config, sheet),
-			createTheme: createCreateThemeFunction(config, sheet),
-			reset() {
-				sheet.reset()
-				returnValue.theme.toString()
-			},
-			theme: { className: '', selector: '', toString: () => '' },
-			sheet,
-			config,
-			prefix,
-			getCssText: sheet.toString,
-			toString: sheet.toString,
-		}
+	const instance = createInstance(memoInit, root)
 
-		// initialize default theme
-		String((returnValue.theme = returnValue.createTheme(theme)))
-
-		return returnValue
-	})
-
-	if (!didRun) instance.reset()
+	instancesByRoot.set(root, instance)
 
 	return instance
+}
+
+const createInstance = (initConfig: Omit<StitchesInit, 'root'>, root: SheetRoot | null): StitchesInstance => {
+	const prefix = initConfig.prefix ?? ''
+	const media = initConfig.media ?? {}
+	const theme = initConfig.theme ?? {}
+	const themeMap = initConfig.themeMap ?? { ...defaultThemeMap }
+	const utils = initConfig.utils ?? {}
+
+	const config: StitchesConfig = { prefix, media, theme, themeMap, utils }
+
+	const sheet = createSheet(root)
+
+	const returnValue: StitchesInstance = {
+		css: createCssFunction(config, sheet),
+		globalCss: createGlobalCssFunction(config, sheet),
+		keyframes: createKeyframesFunction(config, sheet),
+		createTheme: createCreateThemeFunction(config, sheet),
+		reset() {
+			sheet.reset()
+			returnValue.theme.toString()
+		},
+		theme: { className: '', selector: '', toString: () => '' },
+		sheet,
+		config,
+		prefix,
+		getCssText: sheet.toString,
+		toString: sheet.toString,
+	}
+
+	// initialize default theme
+	String((returnValue.theme = returnValue.createTheme(theme)))
+
+	return returnValue
 }
