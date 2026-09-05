@@ -387,6 +387,7 @@ list; it now points here. Items marked done stay for context.
 6. Small confirmed bugs, one PR each, repro already in `docs/bench`: 10.1 B (responsive
    `@initial`), C (tokens in `url()`), D (dots in variant names), E (time units), F (cyclic
    `root`).
+   In review: B = PR #3, C = PR #6, D = PR #5, E = PR #4, F = PR #7.
 7. Own text cache for `getCssText` (10.1 G); unblocks a Next app-router recipe.
 8. `out` variance annotations on the `CSS<...>` generics (10.2).
 9. Composite border tokens via multi-scale `themeMap` (6.1).
