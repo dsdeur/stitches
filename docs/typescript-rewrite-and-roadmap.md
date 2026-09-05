@@ -397,8 +397,8 @@ list; it now points here. Items marked done stay for context.
    the same time rebase onto it.
 3. Precompute variant hashes (3.4 item 1). Done 2026-09-05, PR #1.
 4. Deterministic sheet order (10.1 A; subsumes the cascade-layers item in section 4).
-   Fixes six upstream threads and our own `!important` pain.
-   Design in section 11, awaiting review.
+   Implemented 2026-09-05 behind `cascade: 'declared'` (PR #12); default stays 'legacy'.
+   Default flip and the 'How the cascade works' docs page are 2.0 work.
 5. Own fixes for the packaging and theme-map gaps (10.2 row 1, 10.1 H): `exports.types`
    order, `./types/*` export, `accentColor` and logical border colors. One PR, with tests.
    Merged 2026-09-05: PR #2.
@@ -569,8 +569,9 @@ resolve.
 
 ## 11. Design: deterministic sheet order (task 4)
 
-Status: design for review, 2026-09-05. Not built. Decision so far: precedence follows the
-CSS intuition that later things overwrite earlier things. The open part is migration.
+Status: implemented 2026-09-05 behind `cascade: 'declared'` (PR #12), default 'legacy'.
+The audit script from 11.5 exists (`docs/bench/cascade-audit.mts`). Open: the docs page (11.5 item 4)
+and the default flip in 2.0.
 
 ### 11.1 The rule
 
