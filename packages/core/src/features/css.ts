@@ -30,6 +30,9 @@ const createCssFunctionMap = createMemo()
 
 const isCSSObject = (value: object): value is CSSObject => value.constructor === Object && !('$$typeof' in value)
 
+/** Returns a class selector, escaping characters that are valid in a class attribute but not in a CSS identifier (e.g. a `.` from a variant value like `1.5`). */
+const toClassSelector = (className: string): string => `.${className.replace(/[^\w-]/g, (char) => `\\${char}`)}`
+
 /** Returns a function that applies component styles. */
 export const createCssFunction = (config: StitchesConfig, sheet: SheetGroup): CssFunction =>
 	createCssFunctionMap(config, (): CssFunction => {
@@ -160,7 +163,7 @@ const createRenderer = (config: StitchesConfig, internals: ResolvedInternals, sh
 	const deferredInjector: InjectionDeferrer | null = hasReactType ? createRulesInjectionDeferrer(sheet) : null
 	const injectionTarget = (deferredInjector || sheet).rules
 
-	const selector = `.${baseClassName}${baseClassNames.length > 1 ? `:where(.${baseClassNames.slice(1).join('.')})` : ``}`
+	const selector = `${toClassSelector(baseClassName)}${baseClassNames.length > 1 ? `:where(${baseClassNames.slice(1).map(toClassSelector).join('')})` : ``}`
 
 	const render = (props?: CssProps): RenderResult => {
 		props = (typeof props === 'object' && props) || empty
@@ -196,7 +199,7 @@ const createRenderer = (config: StitchesConfig, internals: ResolvedInternals, sh
 			if (!sheet.rules.styled.cache.has(composerBaseClass)) {
 				sheet.rules.styled.cache.add(composerBaseClass)
 
-				toCssRules(composerBaseStyle, [`.${composerBaseClass}`], [], config, (cssText) => {
+				toCssRules(composerBaseStyle, [toClassSelector(composerBaseClass)], [], config, (cssText) => {
 					injectionTarget.styled.apply(cssText)
 				})
 			}
@@ -217,7 +220,7 @@ const createRenderer = (config: StitchesConfig, internals: ResolvedInternals, sh
 
 					if (!groupCache.has(variantClassName)) {
 						groupCache.add(variantClassName)
-						toCssRules(vStyle, [`.${variantClassName}`], [], config, (cssText) => {
+						toCssRules(vStyle, [toClassSelector(variantClassName)], [], config, (cssText) => {
 							targetInjectionGroup.apply(cssText)
 						})
 					}
@@ -235,7 +238,7 @@ const createRenderer = (config: StitchesConfig, internals: ResolvedInternals, sh
 					if (!sheet.rules.allvar.cache.has(variantClassName)) {
 						sheet.rules.allvar.cache.add(variantClassName)
 
-						toCssRules(vStyle, [`.${variantClassName}`], [], config, (cssText) => {
+						toCssRules(vStyle, [toClassSelector(variantClassName)], [], config, (cssText) => {
 							injectionTarget.allvar.apply(cssText)
 						})
 					}
@@ -254,7 +257,7 @@ const createRenderer = (config: StitchesConfig, internals: ResolvedInternals, sh
 			if (!sheet.rules.inline.cache.has(iClass)) {
 				sheet.rules.inline.cache.add(iClass)
 
-				toCssRules(cssStyles, [`.${iClass}`], [], config, (cssText) => {
+				toCssRules(cssStyles, [toClassSelector(iClass)], [], config, (cssText) => {
 					injectionTarget.inline.apply(cssText)
 				})
 			}
