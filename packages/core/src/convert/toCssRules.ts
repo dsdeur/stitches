@@ -86,7 +86,7 @@ export const toCssRules = (style: CSSObject, selectors: string[], conditions: st
 							? data
 							: typeof data === 'number'
 								? data && !(camelName in unitlessProps) && !(name.charCodeAt(0) === 45)
-									? String(data) + 'px'
+									? String(data) + (camelName in timeProps ? 'ms' : 'px')
 									: String(data)
 								: toTokenizedValue(toSizingValue(camelName, data == null ? '' : String(data)), config.prefix, config.themeMap[camelName])
 
@@ -157,4 +157,12 @@ export const unitlessProps: Record<string, number> = {
 	strokeMiterlimit: 1,
 	strokeOpacity: 1,
 	strokeWidth: 1,
+}
+
+/** CSS Properties whose number values are durations, emitted in milliseconds. */
+export const timeProps: Record<string, number> = {
+	animationDelay: 1,
+	animationDuration: 1,
+	transitionDelay: 1,
+	transitionDuration: 1,
 }
