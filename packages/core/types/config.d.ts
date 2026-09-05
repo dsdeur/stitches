@@ -208,6 +208,8 @@ export type CreateStitches = {
 	>(
 		config?: {
 			prefix?: ConfigType.Prefix<Prefix>
+			/** How rules are ordered in the sheet. 'legacy' (default) is the 1.x behavior. 'declared' orders by composition depth, then rule kind, then declaration order, then breakpoint order, so later declarations overwrite earlier ones regardless of render order. */
+			cascade?: 'legacy' | 'declared'
 			media?: ConfigType.Media<Media>
 			theme?: ConfigType.Theme<Theme>
 			themeMap?: ConfigType.ThemeMap<ThemeMap>

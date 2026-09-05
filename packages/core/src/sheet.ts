@@ -1,8 +1,8 @@
-import type { SheetGroup, RuleGroup, SheetRule, GroupRule, InjectionDeferrer } from './types.ts'
+import type { SheetGroup, RuleGroup, SheetRule, GroupRule, InjectionDeferrer, Cascade, RuleKind } from './types.ts'
 import { getNonce } from './utility/getNonce.ts'
 
 /**
- * Rules in the sheet appear in this order:
+ * Legacy cascade (the 1.x behavior). Rules in the sheet appear in this order:
  * 1. theme rules (themed)
  * 2. global rules (global)
  * 3. component rules (styled)
@@ -10,8 +10,26 @@ import { getNonce } from './utility/getNonce.ts'
  * 5. responsive variants rules (resonevar)
  * 6. compound variants rules (allvar)
  * 7. inline rules (inline)
+ * Within a group, rules are appended in the order they are first rendered.
  */
-export const names = ['themed', 'global', 'styled', 'onevar', 'resonevar', 'allvar', 'inline'] as const
+export const legacyNames: readonly string[] = ['themed', 'global', 'styled', 'onevar', 'resonevar', 'allvar', 'inline']
+
+/** Kinds that get one group per composition depth in the declared cascade. */
+const depthKinds: readonly RuleKind[] = ['styled', 'onevar', 'resonevar', 'allvar']
+
+/** Deepest composition level with its own groups; deeper composers share the last one. */
+export const maxDepth = 7
+
+/**
+ * Declared cascade. Themes and globals first, then for each composition depth the four component
+ * groups (so everything of a deeper composer beats everything of a shallower one), then inline.
+ * Within a group, rules are inserted at a position given by a sort key (declaration and
+ * breakpoint order) instead of being appended, so the sheet does not depend on render order.
+ */
+export const declaredNames: readonly string[] = ['themed', 'global', ...Array.from({ length: maxDepth + 1 }, (_, depth) => depthKinds.map((kind) => `${kind}${depth}`)).flat(), 'inline']
+
+/** Returns the name of the group a rule of the given kind and composition depth belongs to. */
+export const getGroupName = (cascade: Cascade, kind: RuleKind, depth: number): string => (cascade === 'declared' && depthKinds.includes(kind) ? `${kind}${Math.min(depth, maxDepth)}` : kind)
 
 const isSheetAccessible = (sheet: CSSStyleSheet): boolean => {
 	if (sheet.href && !sheet.href.startsWith(location.origin)) {
@@ -24,6 +42,9 @@ const isSheetAccessible = (sheet: CSSStyleSheet): boolean => {
 		return false
 	}
 }
+
+/** Serializes the hydration marker for a group: its cache, plus the rule sort keys in the declared cascade. */
+const toMarker = (group: RuleGroup, cascade: Cascade): string => `--sxs{--sxs:${[...group.cache].join(' ')}${cascade === 'declared' && group.keys.length ? `;--sxsk:${group.keys.join(' ')}` : ''}}`
 
 const getToString = (groupSheet: SheetGroup): (() => string) => {
 	return (): string => {
@@ -42,7 +63,7 @@ const getToString = (groupSheet: SheetGroup): (() => string) => {
 
 					for (const name in groupSheet.rules) {
 						if (groupSheet.rules[name].group === cssRule) {
-							return `--sxs{--sxs:${[...groupSheet.rules[name].cache].join(' ')}}${cssText}`
+							return `${toMarker(groupSheet.rules[name], groupSheet.cascade)}${cssText}`
 						}
 					}
 
@@ -55,11 +76,31 @@ const getToString = (groupSheet: SheetGroup): (() => string) => {
 	}
 }
 
-export const createSheet = (root: (DocumentOrShadowRoot & Node) | null): SheetGroup => {
+/** Parses a hydration marker's cache entries and, in the declared cascade, its rule sort keys. */
+const parseMarker = (cssText: string, cascade: Cascade): { cache: string[]; keys: number[] } => {
+	if (cascade === 'legacy') {
+		// unchanged 1.x parsing of the browser serialization `--sxs { --sxs: ...; }`
+		return { cache: cssText.slice(14, -3).trim().split(/\s+/), keys: [] }
+	}
+
+	const cacheMatch = /--sxs:\s*([^;}]*)/.exec(cssText)
+	const keysMatch = /--sxsk:\s*([^;}]*)/.exec(cssText)
+
+	return {
+		cache: (cacheMatch ? cacheMatch[1] : '').trim().split(/\s+/),
+		keys: keysMatch && keysMatch[1].trim() ? keysMatch[1].trim().split(/\s+/).map(Number) : [],
+	}
+}
+
+export const createSheet = (root: (DocumentOrShadowRoot & Node) | null, cascade: Cascade): SheetGroup => {
+	const names = cascade === 'declared' ? declaredNames : legacyNames
+
 	// groupSheet is initialized by reset() before createSheet returns.
 	// We create the object upfront with a placeholder sheet, then reset() fills it in properly.
 	const groupSheet: SheetGroup = {
 		sheet: null as never, // overwritten by reset() below before any external access
+		cascade,
+		names,
 		rules: {},
 		reset: null as never, // overwritten below
 		toString: null as never, // overwritten below
@@ -106,14 +147,18 @@ export const createSheet = (root: (DocumentOrShadowRoot & Node) | null): SheetGr
 
 				if (!cssText.startsWith('--sxs')) continue
 
-				const cache = cssText.slice(14, -3).trim().split(/\s+/)
+				const { cache, keys } = parseMarker(cssText, cascade)
 
-				const groupName = (names as readonly string[])[Number(cache[0])]
+				const groupName = names[Number(cache[0])]
 
 				if (!groupName) continue
 
+				const groupRule = group as unknown as GroupRule
+				// A key per hydrated rule is required to position later rules; without them, later rules append.
+				const hydratedKeys = keys.length === groupRule.cssRules.length ? keys : Array.from({ length: groupRule.cssRules.length }, () => Number.NEGATIVE_INFINITY)
+
 				groupSheet.sheet = existingSheet
-				groupSheet.rules[groupName] = { group: group as unknown as GroupRule, index, cache: new Set(cache), apply: noop }
+				groupSheet.rules[groupName] = { group: groupRule, index, cache: new Set(cache), keys: hydratedKeys, apply: noop }
 				foundHydrated = true
 			}
 
@@ -167,9 +212,9 @@ export const createSheet = (root: (DocumentOrShadowRoot & Node) | null): SheetGr
 				const index = currentRules[prevName] ? currentRules[prevName].index : currentSheet.cssRules.length
 				currentSheet.insertRule('@media{}', index)
 				currentSheet.insertRule(`--sxs{--sxs:${i}}`, index)
-				currentRules[name] = { group: currentSheet.cssRules[index + 1] as unknown as GroupRule, index, cache: new Set([i]), apply: noop }
+				currentRules[name] = { group: currentSheet.cssRules[index + 1] as unknown as GroupRule, index, cache: new Set([i]), keys: [], apply: noop }
 			}
-			addApplyToGroup(currentRules[name])
+			addApplyToGroup(currentRules[name], cascade)
 		}
 	}
 
@@ -185,15 +230,41 @@ const noop = () => undefined
 /** Document nodes have nodeType 9; this avoids referencing the `Document` global, which does not exist outside browsers. */
 const isDocument = (node: DocumentOrShadowRoot & Node): node is Document => node.nodeType === 9
 
-const addApplyToGroup = (group: RuleGroup): void => {
+const addApplyToGroup = (group: RuleGroup, cascade: Cascade): void => {
 	const groupingRule = group.group
 
-	let index = groupingRule.cssRules.length
+	if (cascade === 'legacy') {
+		let index = groupingRule.cssRules.length
 
-	group.apply = (cssText: string): void => {
+		group.apply = (cssText: string): void => {
+			try {
+				groupingRule.insertRule(cssText, index)
+				++index
+			} catch {
+				// do nothing and continue
+			}
+		}
+
+		return
+	}
+
+	// Declared cascade: insert after the last rule whose key is <= the new key, so equal keys keep
+	// their insertion order and a rule declared earlier always precedes one declared later.
+	const { keys } = group
+
+	group.apply = (cssText: string, key = 0): void => {
+		let low = 0
+		let high = keys.length
+
+		while (low < high) {
+			const middle = (low + high) >>> 1
+			if (keys[middle] > key) high = middle
+			else low = middle + 1
+		}
+
 		try {
-			groupingRule.insertRule(cssText, index)
-			++index
+			groupingRule.insertRule(cssText, low)
+			keys.splice(low, 0, key)
 		} catch {
 			// do nothing and continue
 		}
@@ -206,18 +277,18 @@ const addApplyToGroup = (group: RuleGroup): void => {
  * this way, we would force the styles of the wrapper to be injected after the wrapped component
  */
 export const createRulesInjectionDeferrer = (globalSheet: SheetGroup): InjectionDeferrer => {
-	let pending: [string, string][] = []
+	let pending: [string, string, number | undefined][] = []
 
-	const rules: Record<string, { apply: (rule: string) => void }> = {}
-	names.forEach((sheetName) => {
-		rules[sheetName] = { apply: (rule: string) => pending.push([sheetName, rule]) }
+	const rules: Record<string, { apply: (rule: string, key?: number) => void }> = {}
+	globalSheet.names.forEach((sheetName) => {
+		rules[sheetName] = { apply: (rule: string, key?: number) => pending.push([sheetName, rule, key]) }
 	})
 
 	return Object.assign(
 		function injector() {
 			for (let i = 0; i < pending.length; i++) {
-				const [sheet, cssString] = pending[i]
-				globalSheet.rules[sheet].apply(cssString)
+				const [sheet, cssString, key] = pending[i]
+				globalSheet.rules[sheet].apply(cssString, key)
 			}
 			pending = []
 			return null

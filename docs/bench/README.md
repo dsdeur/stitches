@@ -36,3 +36,7 @@ Referenced from `../typescript-rewrite-and-roadmap.md`. Run from the repo root w
   responsive, composed, and `css`-prop cases and prints class names plus `getCssText()`.
   Run it against `next` and against a PR branch (a worktree works) and `diff` the outputs;
   any runtime PR that claims "no class-name or CSS change" must produce identical files.
+- `cascade-audit.mts legacy.css declared.css page.html`: migration aid for `cascade: 'declared'`
+  (roadmap section 11.5). Feed it `getCssText()` output of the same render in each mode plus the
+  rendered HTML; it resolves the winning declaration per element, viewport, selector suffix and
+  property in both sheets and prints every difference. Exit code 1 when anything differs.

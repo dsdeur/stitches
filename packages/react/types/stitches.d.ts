@@ -92,6 +92,7 @@ export default interface Stitches<
 > {
 	config: {
 		prefix: Prefix
+		cascade: 'legacy' | 'declared'
 		media: Media
 		theme: Theme
 		themeMap: ThemeMap

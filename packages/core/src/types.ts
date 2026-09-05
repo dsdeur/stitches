@@ -16,8 +16,15 @@ export interface CSSObject {
 // User-facing init config — what users pass to createStitches()
 // ---------------------------------------------------------------------------
 
+/** How rules are ordered in the sheet. 'legacy' is the 1.x behavior; 'declared' orders by composition depth, kind, declaration and breakpoint (roadmap section 11). */
+export type Cascade = 'legacy' | 'declared'
+
+/** The kinds of rule groups in the sheet. */
+export type RuleKind = 'themed' | 'global' | 'styled' | 'onevar' | 'resonevar' | 'allvar' | 'inline'
+
 export interface StitchesInit {
 	prefix?: string
+	cascade?: Cascade
 	media?: Record<string, string>
 	theme?: ThemeDefinition
 	themeMap?: Record<string, string>
@@ -31,6 +38,7 @@ export interface StitchesInit {
 
 export interface StitchesConfig {
 	prefix: string
+	cascade: Cascade
 	media: Record<string, string>
 	theme: ThemeDefinition
 	themeMap: Record<string, string>
@@ -72,11 +80,16 @@ export interface RuleGroup {
 	group: GroupRule
 	index: number
 	cache: Set<string | number>
-	apply: (cssText: string) => void
+	/** Sort key of every rule in the group, in rule order. Used by the 'declared' cascade to insert at position; empty in 'legacy'. */
+	keys: number[]
+	apply: (cssText: string, key?: number) => void
 }
 
 export interface SheetGroup {
 	sheet: SheetLike
+	cascade: Cascade
+	/** Group names in sheet order for the active cascade. */
+	names: readonly string[]
 	rules: Record<string, RuleGroup>
 	reset: () => void
 	toString: () => string
@@ -129,7 +142,7 @@ export type CssComponentFunction = {
 
 export interface InjectionDeferrer {
 	(): null
-	rules: Record<string, { apply: (rule: string) => void }>
+	rules: Record<string, { apply: (rule: string, key?: number) => void }>
 }
 
 // ---------------------------------------------------------------------------

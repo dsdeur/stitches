@@ -13,6 +13,7 @@ import type {
 	CssInvocation,
 	ComponentType,
 	CssArg,
+	RuleKind,
 } from '../types.ts'
 import { internal } from '../utility/internal.ts'
 import { createMemo } from '../utility/createMemo.ts'
@@ -23,7 +24,7 @@ import { hasOwn } from '../utility/hasOwn.ts'
 import { toCssRules } from '../convert/toCssRules.ts'
 import { toHash } from '../convert/toHash.ts'
 import { toTailDashed } from '../convert/toTailDashed.ts'
-import { createRulesInjectionDeferrer } from '../sheet.ts'
+import { createRulesInjectionDeferrer, getGroupName } from '../sheet.ts'
 
 const createCssFunctionMap = createMemo()
 
@@ -36,6 +37,9 @@ const toClassSelector = (className: string): string => `.${className.replace(/[^
 /** Returns a function that applies component styles. */
 export const createCssFunction = (config: StitchesConfig, sheet: SheetGroup): CssFunction =>
 	createCssFunctionMap(config, (): CssFunction => {
+		/** Position of each media key in the config, for breakpoint ordering in the declared cascade. */
+		const mediaOrder = new Map(Object.keys(config.media).map((name, index) => [name, index]))
+
 		const _css = (args: CssArg[], componentConfig: ComponentConfig = {}): CssComponentFunction => {
 			const internals: ComponentInternals = {
 				type: null,
@@ -72,7 +76,7 @@ export const createCssFunction = (config: StitchesConfig, sheet: SheetGroup): Cs
 			const type = internals.type ?? 'span'
 			if (!internals.composers.size) internals.composers.add(['PJLV', {}, [], [], {}, []])
 
-			return createRenderer(config, { type, composers: internals.composers }, sheet, componentConfig)
+			return createRenderer(config, { type, composers: internals.composers }, sheet, componentConfig, mediaOrder)
 		}
 
 		const css: CssFunction = Object.assign((...args: CssArg[]) => _css(args), {
@@ -156,7 +160,7 @@ interface CssProps {
 
 type ResolvedInternals = { type: ComponentType; composers: Set<ComposerTuple> }
 
-const createRenderer = (config: StitchesConfig, internals: ResolvedInternals, sheet: SheetGroup, { shouldForwardStitchesProp }: ComponentConfig): CssComponentFunction => {
+const createRenderer = (config: StitchesConfig, internals: ResolvedInternals, sheet: SheetGroup, { shouldForwardStitchesProp }: ComponentConfig, mediaOrder: Map<string, number>): CssComponentFunction => {
 	const [baseClassName, baseClassNames, prefilledVariants, undefinedVariants] = getPreparedDataFromComposers(internals.composers)
 
 	const hasReactType = typeof internals.type === 'function' || (typeof internals.type === 'object' && !!internals.type.$$typeof)
@@ -164,6 +168,20 @@ const createRenderer = (config: StitchesConfig, internals: ResolvedInternals, sh
 	const injectionTarget = (deferredInjector || sheet).rules
 
 	const selector = `${toClassSelector(baseClassName)}${baseClassNames.length > 1 ? `:where(${baseClassNames.slice(1).map(toClassSelector).join('')})` : ``}`
+
+	/** Injects the rules for a class into the group of the given kind and composition depth, once. */
+	const inject = (kind: RuleKind, depth: number, className: string, style: CSSObject, key: number): void => {
+		const groupName = getGroupName(config.cascade, kind, depth)
+		const { cache } = sheet.rules[groupName]
+
+		if (cache.has(className)) return
+
+		cache.add(className)
+
+		toCssRules(style, [toClassSelector(className)], [], config, (cssText) => {
+			injectionTarget[groupName].apply(cssText, key)
+		})
+	}
 
 	const render = (props?: CssProps): RenderResult => {
 		props = (typeof props === 'object' && props) || empty
@@ -195,55 +213,40 @@ const createRenderer = (config: StitchesConfig, internals: ResolvedInternals, sh
 
 		const classSet = new Set([...baseClassNames])
 
+		// Composers are visited base-first, so the position in the set is the composition depth.
+		let depth = 0
+
 		for (const [composerBaseClass, composerBaseStyle, singularVariants, compoundVariants] of internals.composers) {
-			if (!sheet.rules.styled.cache.has(composerBaseClass)) {
-				sheet.rules.styled.cache.add(composerBaseClass)
+			inject('styled', depth, composerBaseClass, composerBaseStyle, 0)
 
-				toCssRules(composerBaseStyle, [toClassSelector(composerBaseClass)], [], config, (cssText) => {
-					injectionTarget.styled.apply(cssText)
-				})
-			}
-
-			const singularVariantsToAdd = getTargetVariantsToAdd(singularVariants, variantProps, config.media)
-			const compoundVariantsToAdd = getTargetVariantsToAdd(compoundVariants, variantProps, config.media, true)
+			const singularVariantsToAdd = getTargetVariantsToAdd(singularVariants, variantProps, config.media, mediaOrder)
+			const compoundVariantsToAdd = getTargetVariantsToAdd(compoundVariants, variantProps, config.media, mediaOrder, true)
 
 			for (const variantToAdd of singularVariantsToAdd) {
 				if (variantToAdd === undefined) continue
 
-				for (const [vClass, vStyle, isResponsive, vHash] of variantToAdd) {
+				for (const [vClass, vStyle, isResponsive, vHash, sortKey] of variantToAdd) {
 					const variantClassName = `${composerBaseClass}-${vHash}-${vClass}`
 
 					classSet.add(variantClassName)
 
-					const groupCache = (isResponsive ? sheet.rules.resonevar : sheet.rules.onevar).cache
-					const targetInjectionGroup = isResponsive ? injectionTarget.resonevar : injectionTarget.onevar
-
-					if (!groupCache.has(variantClassName)) {
-						groupCache.add(variantClassName)
-						toCssRules(vStyle, [toClassSelector(variantClassName)], [], config, (cssText) => {
-							targetInjectionGroup.apply(cssText)
-						})
-					}
+					inject(isResponsive ? 'resonevar' : 'onevar', depth, variantClassName, vStyle, sortKey)
 				}
 			}
 
 			for (const variantToAdd of compoundVariantsToAdd) {
 				if (variantToAdd === undefined) continue
 
-				for (const [vClass, vStyle, , vHash] of variantToAdd) {
+				for (const [vClass, vStyle, , vHash, sortKey] of variantToAdd) {
 					const variantClassName = `${composerBaseClass}-${vHash}-${vClass}`
 
 					classSet.add(variantClassName)
 
-					if (!sheet.rules.allvar.cache.has(variantClassName)) {
-						sheet.rules.allvar.cache.add(variantClassName)
-
-						toCssRules(vStyle, [toClassSelector(variantClassName)], [], config, (cssText) => {
-							injectionTarget.allvar.apply(cssText)
-						})
-					}
+					inject('allvar', depth, variantClassName, vStyle, sortKey)
 				}
 			}
+
+			++depth
 		}
 
 		// apply css property styles
@@ -254,13 +257,7 @@ const createRenderer = (config: StitchesConfig, internals: ResolvedInternals, sh
 
 			classSet.add(iClass)
 
-			if (!sheet.rules.inline.cache.has(iClass)) {
-				sheet.rules.inline.cache.add(iClass)
-
-				toCssRules(cssStyles, [toClassSelector(iClass)], [], config, (cssText) => {
-					injectionTarget.inline.apply(cssText)
-				})
-			}
+			inject('inline', 0, iClass, cssStyles, 0)
 		}
 
 		for (const propClassName of String(props.className || '')
@@ -283,7 +280,7 @@ const createRenderer = (config: StitchesConfig, internals: ResolvedInternals, sh
 	}
 
 	const toString = () => {
-		if (!sheet.rules.styled.cache.has(baseClassName)) render()
+		if (!sheet.rules[getGroupName(config.cascade, 'styled', 0)].cache.has(baseClassName)) render()
 
 		return baseClassName
 	}
@@ -318,12 +315,18 @@ const getPreparedDataFromComposers = (composers: Iterable<ComposerTuple>): [stri
 	return [baseClassName, baseClassNames, combinedPrefilledVariants, new Set(combinedUndefinedVariants)]
 }
 
-type ResolvedVariant = [string, CSSObject, boolean, string]
+/** [className suffix, style, isResponsive, styleHash, sortKey] where sortKey orders rules within a group in the declared cascade. */
+type ResolvedVariant = [string, CSSObject, boolean, string, number]
 
-const getTargetVariantsToAdd = (targetVariants: VariantDef[], variantProps: Record<string, string | Record<string, string>>, media: Record<string, string>, isCompoundVariant?: boolean): (ResolvedVariant[] | undefined)[] => {
+/** Sort key: breakpoint-major (non-responsive first, then media in config order, raw queries last), declaration order within a breakpoint. */
+const toSortKey = (mediaIndex: number, declarationIndex: number): number => (mediaIndex + 1) * 10000 + declarationIndex
+
+const getTargetVariantsToAdd = (targetVariants: VariantDef[], variantProps: Record<string, string | Record<string, string>>, media: Record<string, string>, mediaOrder: Map<string, number>, isCompoundVariant?: boolean): (ResolvedVariant[] | undefined)[] => {
 	const targetVariantsToAdd: (ResolvedVariant[] | undefined)[] = []
 
-	targetVariants: for (const [vMatch, initialVStyle, vEmpty, initialVHash, responsiveStyleHashes] of targetVariants) {
+	targetVariants: for (let declarationIndex = 0; declarationIndex < targetVariants.length; ++declarationIndex) {
+		const [vMatch, initialVStyle, vEmpty, initialVHash, responsiveStyleHashes] = targetVariants[declarationIndex]
+
 		if (vEmpty) continue
 
 		let vStyle = initialVStyle
@@ -333,6 +336,8 @@ const getTargetVariantsToAdd = (targetVariants: VariantDef[], variantProps: Reco
 		let isResponsive = false
 		/** Whether every condition of this variant also holds at `@initial` (exact values always do). */
 		let matchesInitial = true
+		/** Highest config position among the matched breakpoints; -1 when not responsive. */
+		let mediaIndex = -1
 		let vHash = initialVHash
 		const responsiveQueryKeys: string[] = []
 		for (vName in vMatch) {
@@ -350,6 +355,7 @@ const getTargetVariantsToAdd = (targetVariants: VariantDef[], variantProps: Reco
 						if (query !== '@initial') {
 							const cleanQuery = query.slice(1)
 							;(matchedQueries = matchedQueries || []).push(cleanQuery in media ? media[cleanQuery] : query.replace(/^@media ?/, ''))
+							mediaIndex = Math.max(mediaIndex, mediaOrder.get(cleanQuery) ?? mediaOrder.size)
 							isResponsive = true
 						} else {
 							initialMatched = true
@@ -382,8 +388,8 @@ const getTargetVariantsToAdd = (targetVariants: VariantDef[], variantProps: Reco
 		const bucket = (targetVariantsToAdd[vOrder] = targetVariantsToAdd[vOrder] || [])
 		// A value that matches at @initial and again at a breakpoint is wrapped in @media below,
 		// which would drop it below the first breakpoint. Emit the unwrapped rule for @initial as well.
-		if (isResponsive && matchesInitial) bucket.push([vClass, initialVStyle, false, initialVHash])
-		bucket.push([vClass, vStyle, isResponsive, vHash])
+		if (isResponsive && matchesInitial) bucket.push([vClass, initialVStyle, false, initialVHash, toSortKey(-1, declarationIndex)])
+		bucket.push([vClass, vStyle, isResponsive, vHash, toSortKey(mediaIndex, declarationIndex)])
 	}
 
 	return targetVariantsToAdd
