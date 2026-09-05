@@ -105,6 +105,11 @@ Verification: point the existing test suite at `dist` and compare emitted CSS fr
 
 ### Tests: Vitest
 
+**Done 2026-09-05.** `yarn test` runs `vitest run` (globals on, node environment, `vitest.config.ts`).
+vitest 5 requires `vite` as a peer, so both were added. `tsx` stays for `docs/bench`,
+`nodemon` stays for `build:watch`. The `@stitches/test` fixture workspace lost its unused
+eslint/prettier 1.x dev dependencies, which Yarn 1 could not link.
+
 Replaces `.task/test.js`, the custom `expect`, `tsx`, `nodemon`, and the
 `test-globals.d.ts` shims. Handles TypeScript natively; `expectTypeOf` covers the
 `*.type-test.ts` files that today are only checked by `tsc`. React tests run in the jsdom
@@ -376,7 +381,7 @@ list; it now points here. Items marked done stay for context.
 1. Ship the TS branch under our scope: decide the `root` semantics, version, publish.
    Node and CI preparation done 2026-09-05.
 2. Toolchain replacement (section 2b): Vitest, then tsdown, then eslint flat config +
-   publint, then React 19 for tests. May run in parallel with 3 to 5; runtime PRs open at
+   publint, then React 19 for tests. Vitest done 2026-09-05. May run in parallel with 3 to 5; runtime PRs open at
    the same time rebase onto it.
 3. Precompute variant hashes (3.4 item 1). Done 2026-09-05, PR #1.
 4. Deterministic sheet order (10.1 A; subsumes the cascade-layers item in section 4).

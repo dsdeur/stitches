@@ -1,7 +1,7 @@
 import { createStitches } from '../src/index.ts'
 
 describe('Issue #450', () => {
-	test('Basic Tests', () => {
+	describe('Basic Tests', () => {
 		const getFreshComponents = () => {
 			const { css, getCssText } = createStitches()
 
@@ -98,7 +98,7 @@ describe('Issue #450', () => {
 		})
 	})
 
-	test('Basic Tests ported from the React version', () => {
+	describe('Basic Tests ported from the React version', () => {
 		const getFreshComponents = () => {
 			const { css, getCssText } = createStitches()
 

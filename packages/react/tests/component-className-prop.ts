@@ -37,6 +37,6 @@ describe('className prop', () => {
 		const className = undefined
 		const expression = render(component, { className })
 
-		expect(expression.props.className).toNotBe('undefined')
+		expect(expression.props.className).not.toBe('undefined')
 	})
 })

@@ -52,11 +52,13 @@ describe('Issue #416: Composition versus Descendancy', () => {
 			)
 		}
 
+		// Rendered while the suite is collected, because the assertions below read the result at that time.
 		let wrapper: renderer.ReactTestRenderer | undefined
+		renderer.act(() => {
+			wrapper = renderer.create(React.createElement(App))
+		})
 		test('it can render without errors', () => {
-			renderer.act(() => {
-				wrapper = renderer.create(React.createElement(App))
-			})
+			expect(wrapper).not.toBe(undefined)
 		})
 
 		if (wrapper === undefined) throw new Error('wrapper is undefined')

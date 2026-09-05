@@ -35,8 +35,8 @@ describe('Custom root', () => {
 		const a = createStitches({ prefix: 'r2', root: createFakeRoot() })
 		const b = createStitches({ prefix: 'r2', root: createFakeRoot() })
 
-		expect(a).toNotBe(b)
-		expect(a.sheet).toNotBe(b.sheet)
+		expect(a).not.toBe(b)
+		expect(a.sheet).not.toBe(b.sheet)
 	})
 
 	test('the same config with the same root yields the same instance', () => {
