@@ -383,6 +383,7 @@ list; it now points here. Items marked done stay for context.
    Fixes six upstream threads and our own `!important` pain.
 5. Own fixes for the packaging and theme-map gaps (10.2 row 1, 10.1 H): `exports.types`
    order, `./types/*` export, `accentColor` and logical border colors. One PR, with tests.
+   In review: PR #2.
 6. Small confirmed bugs, one PR each, repro already in `docs/bench`: 10.1 B (responsive
    `@initial`), C (tokens in `url()`), D (dots in variant names), E (time units), F (cyclic
    `root`).
