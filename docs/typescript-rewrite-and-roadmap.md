@@ -421,6 +421,16 @@ list; it now points here. Items marked done stay for context.
 - Publishing scope: decided 2026-09-05, `@dsdeur` (personal) for now; may move to a hudoman
   or brox org later. Moving is publish-under-new-name plus `npm deprecate` on the old names;
   consumers change one alias line per package.
+- Publishing target: decided 2026-09-05, GitHub Packages (npm.pkg.github.com), not npmjs.
+  Packages must be scoped to the GitHub owner (`@dsdeur/stitches-core`, `@dsdeur/stitches-react`).
+  Consumers add `@dsdeur:registry=https://npm.pkg.github.com` plus a read token to `.npmrc`
+  and alias `@stitches/react` to the new name. Publishing runs from a GitHub Actions release
+  workflow with the built-in token (task 1).
+- Lint: decided 2026-09-05, oxlint + publint replace eslint, typescript-eslint and
+  @skypack/package-check. Prettier stays for formatting.
+- Cascade (section 11): constraint from review, 2026-09-05: `'legacy'` stays the default and
+  must remain byte-identical to today; `'declared'` is opt-in until a major.
+- `root: undefined`: decided 2026-09-05, restore canary behavior (undefined = document, null = no DOM).
 
 ## 10. Upstream issue triage (stitchesjs/stitches)
 
