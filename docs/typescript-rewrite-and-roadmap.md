@@ -62,7 +62,7 @@ Notes for the upgrade pass (not done yet):
 - `yarn lint:tsc` (`.task/lint-tsc.js`) is silently ineffective under TypeScript 6: it runs
   `tsc --noEmit <file>` per package, TS 6 rejects that with TS5112 because a `tsconfig.json`
   is present, and the step still exits 0. The only real typecheck is `npx tsc -p tsconfig.json`,
-  now exposed as `yarn typecheck` (added 2026-09-05) and run in CI. TODO: drop or fix `lint:tsc`.
+  now exposed as `yarn typecheck` (added 2026-09-05) and run in CI. `lint:tsc` removed 2026-09-05.
 - eslint 7 to 10 requires rewriting the eslintrc config in `package.json` to flat config.
 - react-test-renderer is deprecated in React 19. Upgrading react for tests means moving
   the react tests to `react-dom/server` or Testing Library.
@@ -92,6 +92,15 @@ What each dev dependency is really for, and the verdict:
 | Core | `typescript`, `prettier`, `@types/node` | Keep. Bump `@types/node` to the chosen Node version. |
 
 ### Build: tsdown (or tsup), not Vite
+
+**Done 2026-09-05 (tsdown 0.23).** `yarn build` runs `tsdown` with `tsdown.config.ts`: one build per
+package, esm/cjs/iife, minified, source maps, React external, core bundled into react,
+IIFE global `stitches`. Output file names unchanged (`index.mjs`, `index.cjs`,
+`index.global.js`); source maps are now per file (`index.mjs.map` etc.) instead of one shared
+`index.map`. CSS output verified byte-identical to the old dist for esm and cjs with
+`docs/bench/classname-parity.mts`. Removed: esbuild, terser, acorn + 5 plugins, astring,
+nodemon, the two unused radix packages, `.task/build.js`, `.task/internal/js*.js`, and the
+ineffective `lint:tsc`. Sizes: core esm 16.2 kB min (was 16.6), react 17.0 kB (was 17.3).
 
 Vite is an app bundler; for a zero-dependency library with three output formats it adds
 Rollup plus an unused dev server. tsdown (Rolldown-based successor to tsup) or tsup gives
@@ -381,7 +390,7 @@ list; it now points here. Items marked done stay for context.
 1. Ship the TS branch under our scope: decide the `root` semantics, version, publish.
    Node and CI preparation done 2026-09-05.
 2. Toolchain replacement (section 2b): Vitest, then tsdown, then eslint flat config +
-   publint, then React 19 for tests. Vitest done 2026-09-05. May run in parallel with 3 to 5; runtime PRs open at
+   publint, then React 19 for tests. Vitest and tsdown done 2026-09-05; eslint flat config + publint and React 19 remain. May run in parallel with 3 to 5; runtime PRs open at
    the same time rebase onto it.
 3. Precompute variant hashes (3.4 item 1). Done 2026-09-05, PR #1.
 4. Deterministic sheet order (10.1 A; subsumes the cascade-layers item in section 4).
@@ -409,6 +418,9 @@ list; it now points here. Items marked done stay for context.
 - Type generation: keep hand-written `types/*.d.ts` as the public surface, or derive from
   source? (Large effort; the current split works.)
 - Dev toolchain: decided, see section 2b (tsdown + Vitest). Remaining choice: eslint 10 vs oxlint.
+- Publishing scope: decided 2026-09-05, `@dsdeur` (personal) for now; may move to a hudoman
+  or brox org later. Moving is publish-under-new-name plus `npm deprecate` on the old names;
+  consumers change one alias line per package.
 
 ## 10. Upstream issue triage (stitchesjs/stitches)
 

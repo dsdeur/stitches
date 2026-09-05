@@ -21,7 +21,7 @@ Node 22 (see `.nvmrc`), Yarn 1 (`yarn.lock` v1). No global installs are needed.
 yarn install --frozen-lockfile
 yarn typecheck   # tsc -p tsconfig.json (strict); the only real typecheck, lint:tsc is a no-op
 yarn test        # vitest over packages/*/tests (globals on, node environment)
-yarn build       # esm/cjs/global bundles into packages/*/dist (gitignored)
+yarn build       # tsdown: esm/cjs/global bundles into packages/*/dist (gitignored), config in tsdown.config.ts
 yarn lint        # eslint + package quality checks
 ```
 
