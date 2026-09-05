@@ -186,7 +186,9 @@ hashes never change for non-responsive variants, yet they are recomputed via
 ### 3.4 Optimization candidates (in order of payoff)
 
 1. **Precompute variant hashes** at composer creation; for responsive wrappers key the
-   hash by the joined media string. Expected: roughly halves warm render cost. No API change.
+   hash by the joined media string. **Done 2026-09-05** (PR #1): warm render with 3 variants + compound
+   dropped 35% in the interleaved dist benchmark; class names and emitted CSS verified
+   byte-identical with `docs/bench/classname-parity.mts`. No API change.
 2. **Memoize the whole class string per component** keyed by a string built from the
    variant props (only for the non-responsive, no-`css`-prop case). Turns the common render
    into string-build + Map lookup.
