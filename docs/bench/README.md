@@ -28,3 +28,7 @@ Referenced from `../typescript-rewrite-and-roadmap.md`. Run from the repo root w
 
 - `order.mts`: reproduces the composition-order cases from section 4 of the roadmap.
 - `border.mts`: shows a composite border token working with a `themeMap` override.
+- `upstream-repro.mts`, `upstream-repro2.mts`: reproductions of the upstream issues triaged
+  in section 10 of the roadmap (responsive `@initial` drop, time units, dots in variant
+  names, tokens inside `url()`, order-of-first-render bugs, cyclic `root`, `@import`).
+  Each block prints the emitted CSS and a one-line note on what is wrong.

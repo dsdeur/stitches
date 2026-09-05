@@ -223,6 +223,9 @@ working. The SSR hydration marker (`--sxs`) gains a layer id. Ship behind a conf
 (e.g. `cascade: 'layers'`), then flip the default. Touches `sheet.ts` and `css.ts` only.
 Requires browsers with `@layer` (all evergreen since 2022).
 
+Update (same day, after upstream triage): this is one instance of a wider family. See
+section 10.1 A for the general fix: sheet order as a pure function of declarations.
+
 ## 5. Explorations
 
 ### 5.1 Static extraction (stylex-like build-time CSS)
@@ -371,7 +374,8 @@ values are token references. Small change in `toCssRules` plus types. Lower prio
 1b. Toolchain replacement (section 2b): Vitest, then tsdown, then eslint flat config +
    publint, then React 19 for tests. Can run in parallel with items 2 to 4.
 2. Precompute variant hashes (3.4 item 1).
-3. Cascade layers for composition order (section 4).
+3. Deterministic sheet order (section 10.1 A; subsumes the cascade-layers item in section 4),
+   plus our own fixes for the packaging and theme-map gaps listed in 10.3.
 4. Composite border tokens via multi-scale `themeMap` (6.1).
 5. Static extraction (5.1).
 6. Utility sheet (5.2), after deciding A vs B vs both.
@@ -385,3 +389,140 @@ values are token references. Small change in `toCssRules` plus types. Lower prio
 - Type generation: keep hand-written `types/*.d.ts` as the public surface, or derive from
   source? (Large effort; the current split works.)
 - Dev toolchain: decided, see section 2b (tsdown + Vitest). Remaining choice: eslint 10 vs oxlint.
+
+## 10. Upstream issue triage (stitchesjs/stitches)
+
+Date: 2026-09-05. Upstream has 112 open issues and 8 open PRs; the last release is 1.2.8
+(`latest`) with `1.3.1-1` on the `canary` npm tag. Our `canary` branch is identical to
+upstream `canary` (same head) and carries 268 commits that upstream `main` never released.
+Upstream `main` only differs by a gridGap fix that was reverted. So we are not missing any
+upstream code; the value is in the open issues and unmerged PRs below.
+
+Every "confirmed" row was reproduced against this branch (`docs/bench/upstream-repro.mts`
+and `upstream-repro2.mts`). Engagement is reactions + comments on the upstream issue.
+
+### 10.1 Confirmed bugs, grouped by root cause
+
+**A. Rule order inside a bucket is first-render order, not declaration order.** This is one
+bug with many faces and the highest-engagement family upstream (#913 has 44, #1039 has 33,
+#976 has 18). Within each sheet bucket (`styled`, `onevar`, `resonevar`, ...) rules are
+appended when a class is first rendered. Anything that changes render order changes the
+cascade: client-side navigation, code splitting, SSR vs. hydration, or two components
+sharing a style hash.
+
+| Issue | Engagement | Symptom |
+|---|---|---|
+| #913 | 44 | Extended component loses to base after client navigation |
+| #1039, #976 | 33, 18 | `styled(A, over)` and `styled('div', over)` share a hash; whichever renders first fixes the order |
+| #1060 | 12 | `css()` class passed via `className` cannot override a variant |
+| #1009 (P1) | 5 | Variant priority depends on which variant value rendered first |
+| #885 | 16 | Responsive: `@md` rule injected after `@lg` beats it at wide viewports |
+| #642, #690 | 15, 4 | Same family, older reports |
+
+Fix direction: make the sheet order a pure function of declarations, not of render
+history. Order by (composition depth, rule kind, declaration index within the component,
+media-key index from `config.media`). All four are known when the component is created,
+so the position of every rule is deterministic. This subsumes the cascade-layers proposal
+in section 4 and is also what static extraction (5.1) needs. Implementation: either
+`@layer` per (depth, kind) with per-media sub-buckets, or insert at computed indices
+instead of appending. This is the single most valuable fix for our codebases.
+
+**B. Responsive variant matching drops `@initial` when another breakpoint has the same
+value** (#1146, #896; 10 engagement). In `getTargetVariantsToAdd`, a value that matches
+both `@initial` and a media key gets wrapped in `@media` once, so the unwrapped `@initial`
+rule is never emitted. Reproduced: `{ '@initial': 'red', '@small': 'blue', '@medium': 'red' }`
+yields no un-wrapped `color: red`. Fix: emit the bare rule when `@initial` matched, and
+the media-wrapped rule separately.
+
+**C. Token replacement runs inside `url()` and string literals** (#986; 4). `$` or `--`
+followed by a word inside a URL or quoted string becomes `var(...)`. Reproduced:
+`url(/img/logo$dark.png)` and `content: '"price: $5"'` are both mangled. Upstream merged a
+fix (#1066) and reverted it (#1107) because it broke other cases. Fix: skip replacement
+inside `url(...)` and inside quoted strings in `toTokenizedValue`.
+
+**D. Dots in variant values produce unescaped class names** (#923; 2). `size: '1.5'` emits
+`.c-x-size-1.5` which selects nothing. Fix: escape `.` (and other non-ident characters)
+when building variant class names; the hash already covers uniqueness.
+
+**E. Number values on time properties get `px`** (#1069; 1). `animationDelay: 200` emits
+`200px`. Reproduced for `animationDelay`, `animationDuration`, `transitionDuration`. Fix:
+add the time properties to the unitless list (emit the bare number, or `ms`; unitless
+is the safer choice because it matches React's `style` behavior).
+
+**F. `root` option crashes on cyclic objects** (#832, #1004 PR; #628 and #1048 want the
+feature). `createMemo` stringifies the whole init object, so `root: document` or a shadow
+root can throw "Converting circular structure to JSON". Reproduced with a cyclic object.
+Fix: exclude `root` from the memo key (identity-compare it) rather than adopting the
+PR's safe-stringify. Shadow DOM support (#628, #1048) then becomes viable.
+
+**G. `getCssText()` on the client re-serializes the CSSOM** (#1094; 3, #1166). Browsers
+expand shorthands and reorder declarations in `cssRule.cssText`, so client-side output can
+be invalid (`padding-top: ;`) or misordered (`all: unset`). Server output is fine. Fix:
+keep the injected `cssText` strings per bucket and serialize from that cache instead of
+reading back from the CSSOM. Also removes the `--sxs` marker parsing on the read path.
+
+**H. Small correctness gaps.** `msOverflowStyle` emits `ms-overflow-style` (missing leading
+dash; the `Webkit`/`Moz` prefixes are correct). `defaultThemeMap` lacks `accentColor`,
+`borderInlineColor`, `borderBlockColor` (open PRs #1110, #1159). `@import` values are
+quote-wrapped, which breaks the `url(...)` form.
+
+### 10.2 Types and packaging (affects every consuming codebase)
+
+| Issue / PR | Engagement | Problem | Action |
+|---|---|---|---|
+| #1055, #1160, #833 | 38, 11, 20 | "inferred type cannot be named without a reference to `@stitches/react/types/...`" when a package re-exports `styled` with `declaration: true` or `moduleResolution: bundler` | Put `types` first in `exports` (conditions are matched in order) and export `./types/*`; PRs #1150 and #1115 point at the same thing. Our `exports` currently lists `types` last. Beyond that, the fix is exporting named, stable types for `CSS`, `VariantProps`, and the config so consumers can annotate. |
+| #1038 | 20 | Type-checking without `strict` takes minutes | Add `out` variance annotations on the `CSS<...>` generics in `css-util.d.ts` (suggested in-thread, TS 4.7+). Cheap; verify with the reporter's repro. |
+| #1132 | 0 | Numeric-string variant keys widen `VariantProps` to `number` | Types fix in `styled-component.d.ts`. |
+| #1092, #1021, #749, #848 | low | Misc typing gaps (unknown properties accepted, `Token` not assignable, `as` + variants on composed components) | Backlog; revisit once we decide whether public types stay hand-written (section 9). |
+
+### 10.3 Open upstream PRs (reference only, do not merge)
+
+Policy (2026-09-05): we do not adopt upstream PRs. Unknown authors, no review capacity, and
+the fixes are small enough to write ourselves from an understanding of the issue. The PRs
+are listed as pointers to the problem and as one possible approach, to be read with
+skepticism. Each fix we write gets its own test.
+
+| PR | Size | What |
+|---|---|---|
+| #1150 | 3 files | `exports.types` first (fixes 10.2 row 1) |
+| #1115 | 2 files | export `./types/*` |
+| #1110 | 1 line + types | `accentColor` to `colors` |
+| #1159 | 12 lines | logical border color properties to `colors` |
+| #1165 | 1 line | claims `@import` must be at index 0; not reproduced on the mock sheet. Verify the hydration case before changing anything |
+| #1154 | 1 line | `mask` property (check the type only) |
+| #1004 | 92 lines | vendors a safe-stringify for `root`; the right fix is the smaller one in 10.1 F |
+
+### 10.4 Not bugs, or not ours
+
+- #1085 (util and variant share a name): does not reproduce; the reporter's code has
+  `defaultvariants` lower-cased.
+- #1135 (`WebkitBackgroundClip` prefix stripped): does not reproduce on this branch.
+- #1129 (page freeze): the reporter's `Text` component renders itself.
+- #1046 (boolean responsive `false`): by design, a `false` variant must exist to emit a
+  rule; document it.
+- #570 (`css()()` returns an object): by design, it has `toString`; `String(c())` works.
+  Worth documenting, or returning a string with properties in a major.
+- #882 (cannot override a default variant from `styled(Base, {...})`): by design today;
+  fixed by 10.1 A.
+
+### 10.5 Feature requests that overlap the roadmap
+
+| Issue | Engagement | Maps to |
+|---|---|---|
+| #820 SSR accumulates all styles | 19 | 5.1 static extraction / per-request sheet |
+| #1117 CSS layers | 5 | 10.1 A |
+| #628, #1048 shadow DOM / constructable stylesheets | 25, 15 | 10.1 F, then adopt constructable sheets |
+| #1143 container queries | 17 | small: allow `@container` in media map |
+| #1091 themeable breakpoints, #933 responsive defaultVariants, #1133 simpler responsive API | 10, 6, 8 | responsive design pass after 10.1 A/B |
+| #1049 get rendered CSS from a component, #904 `resolveToken` | 4, 2 | fall out of 5.1 and the native token resolver in 5.3 |
+| #1109 Next 13 app router | 248 | needs a `useServerInsertedHTML` recipe; depends on 10.1 G for correct client output |
+
+### 10.6 Priority for the fork
+
+1. 10.1 A (deterministic order). Fixes six issue threads and our own `!important` pain.
+2. Own fixes for the packaging and theme-map gaps that 10.3 points at (`exports.types`
+   order, `./types/*` export, `accentColor` and logical border colors in the theme map),
+   each with a test.
+3. 10.1 B, C, D, E, F, H: each is a small, testable fix with a repro already written.
+4. 10.1 G (own text cache for `getCssText`), which also unblocks a Next app-router recipe.
+5. 10.2 `out` variance annotations.
