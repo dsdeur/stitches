@@ -22,10 +22,10 @@ yarn install --frozen-lockfile
 yarn typecheck   # tsc -p tsconfig.json (strict); the only real typecheck, lint:tsc is a no-op
 yarn test        # vitest over packages/*/tests (globals on, node environment)
 yarn build       # tsdown: esm/cjs/global bundles into packages/*/dist (gitignored), config in tsdown.config.ts
-yarn lint        # eslint + package quality checks
+yarn lint        # oxlint + publint (publint reads dist, so build first)
 ```
 
-All four must pass before a PR is opened. CI runs typecheck, test, and build.
+All four must pass before a PR is opened. CI runs typecheck, test, build, and lint.
 
 ## Layout
 

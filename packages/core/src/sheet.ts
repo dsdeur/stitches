@@ -20,7 +20,7 @@ const isSheetAccessible = (sheet: CSSStyleSheet): boolean => {
 
 	try {
 		return !!sheet.cssRules
-	} catch (e) {
+	} catch {
 		return false
 	}
 }
@@ -194,7 +194,7 @@ const addApplyToGroup = (group: RuleGroup): void => {
 		try {
 			groupingRule.insertRule(cssText, index)
 			++index
-		} catch (__) {
+		} catch {
 			// do nothing and continue
 		}
 	}

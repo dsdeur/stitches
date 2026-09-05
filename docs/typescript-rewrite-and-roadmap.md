@@ -85,8 +85,8 @@ What each dev dependency is really for, and the verdict:
 | Unused | `@radix-ui/react-polymorphic`, `@radix-ui/react-separator` (root deps); the `@stitches/test` workspace's eslint/prettier 1.x set | Remove. Nothing in `src`, `tests`, or `.task` imports the radix packages. |
 | Hand-rolled bundler | `esbuild` 0.13, `terser`, `acorn` + 5 plugins, `astring` | Replace. The AST pipeline only converts esbuild's ESM output to CJS and IIFE, which esbuild (and every modern bundler) emits natively. |
 | Hand-rolled test runner | `.task/test.js` + `internal/expect.js` (256 lines), `tsx`, `nodemon` | Replace with Vitest. |
-| Lint | `eslint` 7, `@typescript-eslint/*` 5 | Keep; upgrade to eslint 9/10 with flat config, or swap for oxlint. |
-| Package hygiene | `@skypack/package-check` | Drop. Use `publint` and `@arethetypeswrong/cli` instead. |
+| Lint | `eslint` 7, `@typescript-eslint/*` 5 | **Done 2026-09-05:** replaced by oxlint (`.oxlintrc.json`). |
+| Package hygiene | `@skypack/package-check` | **Done 2026-09-05:** replaced by publint (`yarn lint:pkg`, runs after build). |
 | Type generation | `csstype` | Keep. `types/css.d.ts` is generated from it by `.task/build-csstype.js`. |
 | React tests | `react` 17, `react-test-renderer` 17, `@types/react*` 17 | Upgrade to 19 with Vitest. `react-test-renderer` is deprecated in 19; tests move to `react-dom/server` / `react-dom/client` under jsdom. |
 | Core | `typescript`, `prettier`, `@types/node` | Keep. Bump `@types/node` to the chosen Node version. |
@@ -388,9 +388,12 @@ This is the one list agents and people pick work from. Section 10.6 used to be a
 list; it now points here. Items marked done stay for context.
 
 1. Ship the TS branch under our scope: decide the `root` semantics, version, publish.
-   Node and CI preparation done 2026-09-05.
+   Node and CI preparation done 2026-09-05. `root` decided and fixed (PR #10).
+   publint flags one packaging gap to close before publishing: the single `types` condition
+   resolves as ESM for `require` consumers; needs a `types/index.d.cts` (or per-condition
+   types) so CJS consumers get types too. Publishing goes to GitHub Packages (section 9).
 2. Toolchain replacement (section 2b): Vitest, then tsdown, then eslint flat config +
-   publint, then React 19 for tests. Vitest and tsdown done 2026-09-05; eslint flat config + publint and React 19 remain. May run in parallel with 3 to 5; runtime PRs open at
+   publint, then React 19 for tests. Vitest, tsdown, oxlint and publint done 2026-09-05; React 19 for tests remains. May run in parallel with 3 to 5; runtime PRs open at
    the same time rebase onto it.
 3. Precompute variant hashes (3.4 item 1). Done 2026-09-05, PR #1.
 4. Deterministic sheet order (10.1 A; subsumes the cascade-layers item in section 4).
