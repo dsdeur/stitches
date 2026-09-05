@@ -3,7 +3,7 @@
 This is a maintained fork of stitches (CSS-in-JS). It is consumed by several large
 production codebases, so API compatibility matters more than elegance. Read
 `docs/typescript-rewrite-and-roadmap.md` before starting any task; it is the source of
-truth for status, decisions, and the task queue (sections 8 and 10.6).
+truth for status, decisions, and the task queue (section 8).
 
 ## Branches and remotes
 

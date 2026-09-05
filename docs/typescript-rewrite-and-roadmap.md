@@ -368,19 +368,30 @@ values are token references. Small change in `toCssRules` plus types. Lower prio
 - What we like and must preserve: trivial to include, the composition model, tokens and
   themes, template-string token typing.
 
-## 8. Suggested order
+## 8. Task queue (the single authoritative order)
 
-1. Ship the TS branch under our scope: bump CI to Node 18+, decide the `root` semantics,
-   version and publish.
-1b. Toolchain replacement (section 2b): Vitest, then tsdown, then eslint flat config +
-   publint, then React 19 for tests. Can run in parallel with items 2 to 4.
-2. Precompute variant hashes (3.4 item 1).
-3. Deterministic sheet order (section 10.1 A; subsumes the cascade-layers item in section 4),
-   plus our own fixes for the packaging and theme-map gaps listed in 10.3.
-4. Composite border tokens via multi-scale `themeMap` (6.1).
-5. Static extraction (5.1).
-6. Utility sheet (5.2), after deciding A vs B vs both.
-7. Native adapter (5.3), after settling the shared vocabulary.
+This is the one list agents and people pick work from. Section 10.6 used to be a second
+list; it now points here. Items marked done stay for context.
+
+1. Ship the TS branch under our scope: decide the `root` semantics, version, publish.
+   Node and CI preparation done 2026-09-05.
+2. Toolchain replacement (section 2b): Vitest, then tsdown, then eslint flat config +
+   publint, then React 19 for tests. May run in parallel with 3 to 5; runtime PRs open at
+   the same time rebase onto it.
+3. Precompute variant hashes (3.4 item 1). Done 2026-09-05, PR #1.
+4. Deterministic sheet order (10.1 A; subsumes the cascade-layers item in section 4).
+   Fixes six upstream threads and our own `!important` pain.
+5. Own fixes for the packaging and theme-map gaps (10.2 row 1, 10.1 H): `exports.types`
+   order, `./types/*` export, `accentColor` and logical border colors. One PR, with tests.
+6. Small confirmed bugs, one PR each, repro already in `docs/bench`: 10.1 B (responsive
+   `@initial`), C (tokens in `url()`), D (dots in variant names), E (time units), F (cyclic
+   `root`).
+7. Own text cache for `getCssText` (10.1 G); unblocks a Next app-router recipe.
+8. `out` variance annotations on the `CSS<...>` generics (10.2).
+9. Composite border tokens via multi-scale `themeMap` (6.1).
+10. Static extraction (5.1).
+11. Utility sheet (5.2), after deciding A vs B vs both.
+12. Native adapter (5.3), after settling the shared vocabulary.
 
 ## 9. Open questions
 
@@ -520,10 +531,5 @@ skepticism. Each fix we write gets its own test.
 
 ### 10.6 Priority for the fork
 
-1. 10.1 A (deterministic order). Fixes six issue threads and our own `!important` pain.
-2. Own fixes for the packaging and theme-map gaps that 10.3 points at (`exports.types`
-   order, `./types/*` export, `accentColor` and logical border colors in the theme map),
-   each with a test.
-3. 10.1 B, C, D, E, F, H: each is a small, testable fix with a repro already written.
-4. 10.1 G (own text cache for `getCssText`), which also unblocks a Next app-router recipe.
-5. 10.2 `out` variance annotations.
+Folded into section 8, which is the single task queue. Kept as a heading so older links
+resolve.
