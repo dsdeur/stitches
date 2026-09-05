@@ -381,6 +381,7 @@ list; it now points here. Items marked done stay for context.
 3. Precompute variant hashes (3.4 item 1). Done 2026-09-05, PR #1.
 4. Deterministic sheet order (10.1 A; subsumes the cascade-layers item in section 4).
    Fixes six upstream threads and our own `!important` pain.
+   Design in section 11, awaiting review.
 5. Own fixes for the packaging and theme-map gaps (10.2 row 1, 10.1 H): `exports.types`
    order, `./types/*` export, `accentColor` and logical border colors. One PR, with tests.
    Merged 2026-09-05: PR #2.
@@ -535,3 +536,106 @@ skepticism. Each fix we write gets its own test.
 
 Folded into section 8, which is the single task queue. Kept as a heading so older links
 resolve.
+
+## 11. Design: deterministic sheet order (task 4)
+
+Status: design for review, 2026-09-05. Not built. Decision so far: precedence follows the
+CSS intuition that later things overwrite earlier things. The open part is migration.
+
+### 11.1 The rule
+
+Order is a pure function of what was declared, never of what rendered first.
+
+1. **Composition depth first.** In `styled(A, over)`, everything of `over` (base and its
+   variants) beats everything of `A` (base and its variants). Deeper always wins.
+2. **Kind second, within one depth.** base < variants < compound variants. The `css` prop
+   stays last overall.
+3. **Declaration order third.** Two variants of one component that set the same property:
+   the one declared later wins. Compound variants likewise, in array order.
+4. **Breakpoint order fourth.** Responsive rules for the same declaration are ordered by
+   the key order of `config.media`; a later breakpoint wins. `@initial` comes before all.
+5. Themes and `globalCss` stay first, in their current positions.
+
+What stays unsolvable and is documented as such: two unrelated components merged via
+`className`. There is no declared relationship, so no declared order.
+
+### 11.2 Mechanism: bounded position groups, no `@layer`
+
+The sheet already works this way for 7 groups: each group is an empty `@media{}` block and
+rules are inserted into the right block. Extend that:
+
+- Groups become `themed`, `global`, then for each depth `d` in `0..7`: `d-styled`,
+  `d-onevar`, `d-resonevar`, `d-allvar`, then `inline`. 35 blocks instead of 7. Empty
+  blocks are free. Depth beyond 7 clamps to 7 (composition that deep is theoretical).
+- Within a group, rules are no longer appended. Each rule carries a sort key
+  `(declarationIndex, mediaIndex)`; the group keeps a parallel sorted key list and inserts
+  at the binary-searched position. Both indices are known at render time: the variant's
+  position in the composer, and the media key's position in `config.media`.
+- The hydration marker gains the key: `--sxs{--sxs:<group> class@key class@key ...}`, so
+  rules injected after hydration land in the right place relative to server-rendered ones.
+  The marker stays parseable by the same code path.
+- Cascade layers were considered and rejected for this: layer order is fixed by first
+  declaration, so depth-major order with unknown depths would need the same bounded
+  pre-declaration anyway, and layers add a browser floor (2022) for no gain.
+
+Class names do not change. A style object used at depth 0 in one component and depth 1 in
+another produces the same class in two groups; the deeper copy wins where it applies.
+Performance: one binary search per newly injected rule (cold path only). Warm renders are
+untouched.
+
+### 11.3 Rollout
+
+- `createStitches({ cascade: 'declared' })` opt-in in the 2.0 prereleases, default stays
+  `'legacy'` (today's behavior, byte-identical).
+- `2.0.0` flips the default to `'declared'`; `'legacy'` remains available for one major.
+- Server and client must run the same mode (the marker format differs). They already must
+  run the same version.
+
+### 11.4 What changes for an existing codebase
+
+Every change below turns "depends on which page rendered first" into "depends on what you
+wrote". Pages that rendered the same way regardless of order see no change. Pages that
+happened to render in the order that produced the intended look also see no change. The
+rest are the ones that were already flaky across navigation.
+
+| Situation | Legacy | Declared | Likely fix |
+|---|---|---|---|
+| `styled(A, { color })` where `A` has a variant setting `color` | variant wins (needed `!important`) | extension wins | remove the `!important` |
+| Two variants of one component set the same property | first rendered wins | later declared wins | reorder the variant declarations, or use a compound variant |
+| Responsive values at two breakpoints from different renders | first rendered wins | later breakpoint wins | none; this is the intended result |
+| Same style object reused at different depths (#1039) | first rendered wins | deeper wins | none |
+| `css()` class passed via `className` to override a variant (#1060) | variant wins | still variant wins (depth of the receiving component) | use the `css` prop or extend the component |
+
+### 11.5 Migration tooling and guidance
+
+1. **Cascade audit script** (`docs/bench/cascade-audit.mts`, to build with the feature).
+   Input: a rendered page's class lists (from SSR output or a test render) and the config.
+   It resolves every element's winning declaration per property under both modes and lists
+   the elements and properties that differ, with the component names involved. Because all
+   generated rules are single-class with equal specificity, the resolution is order-based
+   and exact for stitches-generated rules. This turns "something might change" into a
+   finite list per app.
+2. **Suggested order per codebase**: enable `'declared'` in a preview environment, run the
+   audit over the SSR output of the main routes, fix the listed spots (most are a variant
+   reorder or an `!important` removal), then run the visual regression suite if one exists.
+3. **`!important` inventory**: grep the codebase's stitches styles for `!important`. Most
+   were added for the first row of the table above and can go once the mode is on. Leave
+   them during migration; remove after the audit is clean.
+4. **Documentation**: a "How the cascade works" page with the five rules in 11.1 and the
+   table in 11.4. The current docs never state the order; that is why people reach for
+   `!important`.
+
+### 11.6 Tests
+
+- Unit: each rule in 11.1 as a `getCssText()` assertion with render order deliberately
+  reversed; the six upstream repros in `docs/bench/upstream-repro*.mts` for #913, #1039,
+  #976, #1009, #885, #1060 become tests.
+- Parity: `'legacy'` mode must stay byte-identical to `next` for the parity fixture.
+- Hydration: server render in `'declared'`, hydrate, inject a new rule, assert position.
+
+### 11.7 Open questions for review
+
+- Depth cap of 8: fine, or make it configurable?
+- Should `'declared'` also be the default for `getCssText()` static output, or follow the
+  runtime mode? (Proposal: follow the runtime mode.)
+- Name of the option: `cascade: 'declared' | 'legacy'`.
