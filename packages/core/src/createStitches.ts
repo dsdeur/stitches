@@ -19,8 +19,9 @@ export const createStitches = (init?: StitchesInit): StitchesInstance => {
 
 	// `root` is a DOM node, so it is cyclic and cannot be part of the serialized memo key.
 	// Instances are memoized on the rest of the config, then on the identity of the root.
+	// An absent or undefined root means the document (as in 1.2.x); null means no DOM at all.
 	const { root: initRoot, ...memoInit } = initConfig
-	const root: SheetRoot | null = 'root' in initConfig ? (initRoot ?? null) : (globalThis.document ?? null)
+	const root: SheetRoot | null = initRoot === undefined ? (globalThis.document ?? null) : initRoot
 
 	const instancesByRoot = createInstancesMap(memoInit, (): Map<SheetRoot | null, StitchesInstance> => new Map())
 

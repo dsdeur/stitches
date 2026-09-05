@@ -45,3 +45,53 @@ describe('Custom root', () => {
 		expect(createStitches({ prefix: 'r3', root })).toBe(createStitches({ prefix: 'r3', root }))
 	})
 })
+
+describe('Root defaults', () => {
+	/** A Document-like root that counts how many style elements were requested from it. */
+	const createFakeDocument = () => {
+		const doc = {
+			nodeType: 9,
+			styleSheets: [],
+			createElementCalls: 0,
+			head: { appendChild: (element) => element },
+			createElement() {
+				this.createElementCalls++
+				return { setAttribute() {}, sheet: null }
+			},
+		}
+		return doc
+	}
+
+	const withDocument = (doc, run) => {
+		globalThis.document = doc
+		try {
+			run()
+		} finally {
+			delete globalThis.document
+		}
+	}
+
+	test('an explicitly undefined root falls back to the document, as in 1.2.x', () => {
+		const doc = createFakeDocument()
+		withDocument(doc, () => {
+			createStitches({ prefix: 'rd1', root: undefined })
+		})
+		expect(doc.createElementCalls).toBe(1)
+	})
+
+	test('an absent root also uses the document', () => {
+		const doc = createFakeDocument()
+		withDocument(doc, () => {
+			createStitches({ prefix: 'rd2' })
+		})
+		expect(doc.createElementCalls).toBe(1)
+	})
+
+	test('a null root never touches the document', () => {
+		const doc = createFakeDocument()
+		withDocument(doc, () => {
+			createStitches({ prefix: 'rd3', root: null })
+		})
+		expect(doc.createElementCalls).toBe(0)
+	})
+})
