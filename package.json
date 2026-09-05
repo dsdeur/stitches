@@ -3,6 +3,10 @@
   "name": "stitches",
   "type": "module",
   "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "yarn@1.22.19",
   "contributors": [
     "Pedro Duarte",
     "Abdulhadi Alhallak <abdul@workos.com>",
@@ -19,7 +23,8 @@
     "release": "node .task/release.js",
     "test": "tsx .task/test.js",
     "test:coverage": "tsx .task/test-coverage.js .task/test.js",
-    "test:watch": "tsx .task/test.js --watch"
+    "test:watch": "tsx .task/test.js --watch",
+    "typecheck": "tsc -p tsconfig.json"
   },
   "workspaces": [
     "packages/core",

@@ -23,9 +23,8 @@ Things to know before depending on it:
   deliberately loose (`CSSObject` is a string-indexed record). It is not derived from nor
   checked against the public declarations, so there are now two sources of truth.
   Generating rich public types from source is still open work.
-- **CI is broken on Node 16.** `.github/workflows/test.yml` pins Node 16; the test runner
-  now uses `tsx`, which requires Node >= 18. TODO: bump CI (and add an `engines` field).
-  Not done yet by request.
+- **CI was broken on Node 16.** Fixed 2026-09-05: CI now reads `.nvmrc` (Node 22), runs
+  typecheck, test, and build, and `package.json` declares `engines` and `packageManager`.
 - **One semantic change.** `createStitches({ root: undefined })` now yields the SSR mock
   sheet (`'root' in init` check) where canary fell back to `document`
   (`typeof init.root === 'object'` check). See `packages/core/src/createStitches.ts:25`.
@@ -63,7 +62,7 @@ Notes for the upgrade pass (not done yet):
 - `yarn lint:tsc` (`.task/lint-tsc.js`) is silently ineffective under TypeScript 6: it runs
   `tsc --noEmit <file>` per package, TS 6 rejects that with TS5112 because a `tsconfig.json`
   is present, and the step still exits 0. The only real typecheck is `npx tsc -p tsconfig.json`,
-  which has no `package.json` script yet. TODO: add a `typecheck` script and fix or drop `lint:tsc`.
+  now exposed as `yarn typecheck` (added 2026-09-05) and run in CI. TODO: drop or fix `lint:tsc`.
 - eslint 7 to 10 requires rewriting the eslintrc config in `package.json` to flat config.
 - react-test-renderer is deprecated in React 19. Upgrading react for tests means moving
   the react tests to `react-dom/server` or Testing Library.

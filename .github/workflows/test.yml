@@ -1,14 +1,22 @@
 name: CI
-on: push
+on:
+  push:
+    branches: [next, canary]
+  pull_request:
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-node@v2
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: '16'
+          node-version-file: .nvmrc
+          cache: yarn
       - name: Install modules
-        run: yarn
+        run: yarn install --frozen-lockfile
+      - name: Typecheck
+        run: yarn typecheck
       - name: Run tests
         run: yarn test
+      - name: Build
+        run: yarn build
