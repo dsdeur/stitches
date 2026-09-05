@@ -186,7 +186,9 @@ hashes never change for non-responsive variants, yet they are recomputed via
 ### 3.4 Optimization candidates (in order of payoff)
 
 1. **Precompute variant hashes** at composer creation; for responsive wrappers key the
-   hash by the joined media string. Expected: roughly halves warm render cost. No API change.
+   hash by the joined media string. **Done 2026-09-05.** An interleaved 12-round dist
+   benchmark reduced the median warm render from 6048 ns to 3960 ns (35%). No API,
+   emitted-CSS, or class-name change.
 2. **Memoize the whole class string per component** keyed by a string built from the
    variant props (only for the non-responsive, no-`css`-prop case). Turns the common render
    into string-build + Map lookup.
@@ -368,17 +370,19 @@ values are token references. Small change in `toCssRules` plus types. Lower prio
 
 ## 8. Suggested order
 
-1. Ship the TS branch under our scope: bump CI to Node 18+, decide the `root` semantics,
-   version and publish.
-1b. Toolchain replacement (section 2b): Vitest, then tsdown, then eslint flat config +
-   publint, then React 19 for tests. Can run in parallel with items 2 to 4.
-2. Precompute variant hashes (3.4 item 1).
-3. Deterministic sheet order (section 10.1 A; subsumes the cascade-layers item in section 4),
-   plus our own fixes for the packaging and theme-map gaps listed in 10.3.
-4. Composite border tokens via multi-scale `themeMap` (6.1).
-5. Static extraction (5.1).
-6. Utility sheet (5.2), after deciding A vs B vs both.
-7. Native adapter (5.3), after settling the shared vocabulary.
+The maintained task queue is section 10.6. It takes precedence over the broader sequence
+below; do not select work from this section without first consulting that queue.
+
+1. Ship the TS branch under our scope: decide the `root` semantics, version, and publish.
+   The Node and CI preparation is complete.
+2. Work through the fork priorities in section 10.6, beginning with deterministic sheet
+   order. Precomputed variant hashes (3.4 item 1) were completed 2026-09-05.
+3. Replace the toolchain (section 2b): Vitest, then tsdown, then eslint flat config +
+   publint, then React 19 for tests. This can proceed independently of runtime fixes.
+4. Add composite border tokens via multi-scale `themeMap` (6.1).
+5. Add static extraction (5.1).
+6. Add a utility sheet (5.2), after deciding A vs B vs both.
+7. Add the native adapter (5.3), after settling the shared vocabulary.
 
 ## 9. Open questions
 

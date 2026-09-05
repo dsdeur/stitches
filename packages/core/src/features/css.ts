@@ -123,7 +123,7 @@ const createComposer = (styleConfig: CSSObject, config: StitchesConfig, { compon
 
 				const vStyle = variantPairs[pair]
 
-				singularVariants.push([vMatch, vStyle, !hasNames(vStyle)])
+				singularVariants.push([vMatch, vStyle, !hasNames(vStyle), toHash(vStyle), new Map()])
 			}
 		}
 	}
@@ -137,7 +137,7 @@ const createComposer = (styleConfig: CSSObject, config: StitchesConfig, { compon
 			const resolvedMatch: Record<string, string> = {}
 			for (const name in vMatch) resolvedMatch[name] = String(vMatch[name])
 
-			compoundVariants.push([resolvedMatch, resolvedStyle, !hasNames(resolvedStyle)])
+			compoundVariants.push([resolvedMatch, resolvedStyle, !hasNames(resolvedStyle), toHash(resolvedStyle), new Map()])
 		}
 	}
 
@@ -207,8 +207,8 @@ const createRenderer = (config: StitchesConfig, internals: ResolvedInternals, sh
 			for (const variantToAdd of singularVariantsToAdd) {
 				if (variantToAdd === undefined) continue
 
-				for (const [vClass, vStyle, isResponsive] of variantToAdd) {
-					const variantClassName = `${composerBaseClass}-${toHash(vStyle)}-${vClass}`
+				for (const [vClass, vStyle, isResponsive, vHash] of variantToAdd) {
+					const variantClassName = `${composerBaseClass}-${vHash}-${vClass}`
 
 					classSet.add(variantClassName)
 
@@ -227,8 +227,8 @@ const createRenderer = (config: StitchesConfig, internals: ResolvedInternals, sh
 			for (const variantToAdd of compoundVariantsToAdd) {
 				if (variantToAdd === undefined) continue
 
-				for (const [vClass, vStyle] of variantToAdd) {
-					const variantClassName = `${composerBaseClass}-${toHash(vStyle)}-${vClass}`
+				for (const [vClass, vStyle, , vHash] of variantToAdd) {
+					const variantClassName = `${composerBaseClass}-${vHash}-${vClass}`
 
 					classSet.add(variantClassName)
 
@@ -315,12 +315,12 @@ const getPreparedDataFromComposers = (composers: Iterable<ComposerTuple>): [stri
 	return [baseClassName, baseClassNames, combinedPrefilledVariants, new Set(combinedUndefinedVariants)]
 }
 
-type ResolvedVariant = [string, CSSObject, boolean]
+type ResolvedVariant = [string, CSSObject, boolean, string]
 
 const getTargetVariantsToAdd = (targetVariants: VariantDef[], variantProps: Record<string, string | Record<string, string>>, media: Record<string, string>, isCompoundVariant?: boolean): (ResolvedVariant[] | undefined)[] => {
 	const targetVariantsToAdd: (ResolvedVariant[] | undefined)[] = []
 
-	targetVariants: for (const [vMatch, initialVStyle, vEmpty] of targetVariants) {
+	targetVariants: for (const [vMatch, initialVStyle, vEmpty, initialVHash, responsiveStyleHashes] of targetVariants) {
 		if (vEmpty) continue
 
 		let vStyle = initialVStyle
@@ -328,6 +328,8 @@ const getTargetVariantsToAdd = (targetVariants: VariantDef[], variantProps: Reco
 		let vName = ''
 
 		let isResponsive = false
+		let vHash = initialVHash
+		const responsiveQueryKeys: string[] = []
 		for (vName in vMatch) {
 			const vPair = vMatch[vName]
 			const pPair = variantProps[vName]
@@ -352,16 +354,23 @@ const getTargetVariantsToAdd = (targetVariants: VariantDef[], variantProps: Reco
 					++qOrder
 				}
 				if (matchedQueries && matchedQueries.length) {
+					const queryKey = matchedQueries.join(', ')
 					vStyle = {
-						['@media ' + matchedQueries.join(', ')]: vStyle,
+						['@media ' + queryKey]: vStyle,
 					}
+					responsiveQueryKeys.push(queryKey)
 				}
 
 				if (!didMatch) continue targetVariants
 			} else continue targetVariants
 		}
+		if (responsiveQueryKeys.length) {
+			const queryKey = responsiveQueryKeys.join('|')
+			vHash = responsiveStyleHashes.get(queryKey) || toHash(vStyle)
+			responsiveStyleHashes.set(queryKey, vHash)
+		}
 		const bucket = (targetVariantsToAdd[vOrder] = targetVariantsToAdd[vOrder] || [])
-		bucket.push([isCompoundVariant ? `cv` : `${vName}-${vMatch[vName]}`, vStyle, isResponsive])
+		bucket.push([isCompoundVariant ? `cv` : `${vName}-${vMatch[vName]}`, vStyle, isResponsive, vHash])
 	}
 
 	return targetVariantsToAdd
