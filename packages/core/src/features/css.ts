@@ -328,6 +328,8 @@ const getTargetVariantsToAdd = (targetVariants: VariantDef[], variantProps: Reco
 		let vName = ''
 
 		let isResponsive = false
+		/** Whether every condition of this variant also holds at `@initial` (exact values always do). */
+		let matchesInitial = true
 		let vHash = initialVHash
 		const responsiveQueryKeys: string[] = []
 		for (vName in vMatch) {
@@ -337,6 +339,7 @@ const getTargetVariantsToAdd = (targetVariants: VariantDef[], variantProps: Reco
 			if (pPair === vPair) continue
 			else if (typeof pPair === 'object' && pPair) {
 				let didMatch: boolean | undefined
+				let initialMatched = false
 				let qOrder = 0
 				let matchedQueries: string[] | undefined
 				for (const query in pPair) {
@@ -345,6 +348,8 @@ const getTargetVariantsToAdd = (targetVariants: VariantDef[], variantProps: Reco
 							const cleanQuery = query.slice(1)
 							;(matchedQueries = matchedQueries || []).push(cleanQuery in media ? media[cleanQuery] : query.replace(/^@media ?/, ''))
 							isResponsive = true
+						} else {
+							initialMatched = true
 						}
 
 						vOrder += qOrder
@@ -362,6 +367,7 @@ const getTargetVariantsToAdd = (targetVariants: VariantDef[], variantProps: Reco
 				}
 
 				if (!didMatch) continue targetVariants
+				if (!initialMatched) matchesInitial = false
 			} else continue targetVariants
 		}
 		if (responsiveQueryKeys.length) {
@@ -369,8 +375,12 @@ const getTargetVariantsToAdd = (targetVariants: VariantDef[], variantProps: Reco
 			vHash = responsiveStyleHashes.get(queryKey) || toHash(vStyle)
 			responsiveStyleHashes.set(queryKey, vHash)
 		}
+		const vClass = isCompoundVariant ? `cv` : `${vName}-${vMatch[vName]}`
 		const bucket = (targetVariantsToAdd[vOrder] = targetVariantsToAdd[vOrder] || [])
-		bucket.push([isCompoundVariant ? `cv` : `${vName}-${vMatch[vName]}`, vStyle, isResponsive, vHash])
+		// A value that matches at @initial and again at a breakpoint is wrapped in @media below,
+		// which would drop it below the first breakpoint. Emit the unwrapped rule for @initial as well.
+		if (isResponsive && matchesInitial) bucket.push([vClass, initialVStyle, false, initialVHash])
+		bucket.push([vClass, vStyle, isResponsive, vHash])
 	}
 
 	return targetVariantsToAdd
