@@ -32,3 +32,7 @@ Referenced from `../typescript-rewrite-and-roadmap.md`. Run from the repo root w
   in section 10 of the roadmap (responsive `@initial` drop, time units, dots in variant
   names, tokens inside `url()`, order-of-first-render bugs, cyclic `root`, `@import`).
   Each block prints the emitted CSS and a one-line note on what is wrong.
+- `classname-parity.mts <core-entry>`: renders a fixture covering base, singular, compound,
+  responsive, composed, and `css`-prop cases and prints class names plus `getCssText()`.
+  Run it against `next` and against a PR branch (a worktree works) and `diff` the outputs;
+  any runtime PR that claims "no class-name or CSS change" must produce identical files.
