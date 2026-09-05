@@ -383,11 +383,11 @@ list; it now points here. Items marked done stay for context.
    Fixes six upstream threads and our own `!important` pain.
 5. Own fixes for the packaging and theme-map gaps (10.2 row 1, 10.1 H): `exports.types`
    order, `./types/*` export, `accentColor` and logical border colors. One PR, with tests.
-   In review: PR #2.
+   Merged 2026-09-05: PR #2.
 6. Small confirmed bugs, one PR each, repro already in `docs/bench`: 10.1 B (responsive
    `@initial`), C (tokens in `url()`), D (dots in variant names), E (time units), F (cyclic
    `root`).
-   In review: B = PR #3, C = PR #6, D = PR #5, E = PR #4, F = PR #7.
+   Merged 2026-09-05: B = PR #3, C = PR #6, D = PR #5, E = PR #4, F = PR #7.
 7. Own text cache for `getCssText` (10.1 G); unblocks a Next app-router recipe.
 8. `out` variance annotations on the `CSS<...>` generics (10.2).
 9. Composite border tokens via multi-scale `themeMap` (6.1).
