@@ -8,10 +8,11 @@
  * page.html: the rendered markup; every class="..." attribute is treated as one element.
  *
  * Generated rules are single-class selectors with equal specificity, so within one context the
- * last matching rule wins per property. Contexts are viewports: every distinct `min-width` in
- * the sheets becomes a viewport (plus the base one), and a min-width rule applies at every
- * viewport at least that wide, which is what makes two breakpoints compete. Media queries that
- * are not a plain min-width are treated as their own context. The audit resolves the winner for
+ * last matching rule wins per property. Contexts are viewports: every `min-width` and
+ * `max-width` value in the sheets yields candidate widths (the value itself and one pixel past
+ * it), and a query applies at a width when all of its width conditions hold, which is what makes
+ * two breakpoints compete. Media queries with anything other than width conditions are treated
+ * as their own context. The audit resolves the winner for
  * every element and (context, selector suffix, property) in both sheets and prints the differences.
  * Exit code 1 when there are differences, so it can gate a migration in CI.
  */
@@ -76,24 +77,45 @@ const parseSheet = (cssText: string): Rule[] => {
 	return rules
 }
 
-/** Pixel value of a plain `(min-width: Npx)` query, or null for anything else. */
-const minWidthOf = (media: string): number | null => {
-	const match = /^\(min-width:\s*([\d.]+)px\)$/.exec(media.trim())
-	return match ? Number(match[1]) : null
+interface WidthQuery {
+	min: number
+	max: number
+}
+
+/** Parses a query made only of min-width / max-width conditions joined by 'and'; null for anything else. */
+const parseWidthQuery = (media: string): WidthQuery | null => {
+	if (!media) return { min: 0, max: Infinity }
+	const query: WidthQuery = { min: 0, max: Infinity }
+	for (const part of media.split(/\s+and\s+/)) {
+		const match = /^\((min|max)-width:\s*([\d.]+)px\)$/.exec(part.trim())
+		if (!match) return null
+		if (match[1] === 'min') query.min = Math.max(query.min, Number(match[2]))
+		else query.max = Math.min(query.max, Number(match[2]))
+	}
+	return query
 }
 
 type Context = number | string
 
-/** Viewports (0 plus every min-width seen, ascending) followed by every other media query verbatim. */
+/** Candidate viewport widths (0, every boundary, and one pixel past each) followed by every non-width media query verbatim. */
 const contextsOf = (...sheets: Rule[][]): Context[] => {
 	const widths = new Set<number>([0])
 	const others = new Set<string>()
 	for (const rules of sheets) {
 		for (const rule of rules) {
 			if (!rule.media) continue
-			const width = minWidthOf(rule.media)
-			if (width === null) others.add(rule.media)
-			else widths.add(width)
+			const query = parseWidthQuery(rule.media)
+			if (query === null) {
+				others.add(rule.media)
+				continue
+			}
+			for (const boundary of [query.min, query.max]) {
+				if (Number.isFinite(boundary)) {
+					widths.add(boundary)
+					widths.add(boundary + 1)
+					if (boundary > 0) widths.add(boundary - 1)
+				}
+			}
 		}
 	}
 	return [...[...widths].sort((a, b) => a - b), ...others]
@@ -101,11 +123,11 @@ const contextsOf = (...sheets: Rule[][]): Context[] => {
 
 const appliesIn = (rule: Rule, context: Context): boolean => {
 	if (typeof context === 'string') return rule.media === context
-	const width = rule.media ? minWidthOf(rule.media) : 0
-	return width !== null && width <= context
+	const query = parseWidthQuery(rule.media)
+	return query !== null && query.min <= context && context <= query.max
 }
 
-const describeContext = (context: Context): string => (typeof context === 'number' ? `>=${context}px` : context)
+const describeContext = (context: Context): string => (typeof context === 'number' ? `${context}px wide` : context)
 
 /** For one element: winning class and value per (context, suffix, property). */
 const resolve = (rules: Rule[], classes: Set<string>, contexts: Context[]): Map<string, { winner: string; value: string }> => {

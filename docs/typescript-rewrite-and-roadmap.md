@@ -583,8 +583,11 @@ Order is a pure function of what was declared, never of what rendered first.
    stays last overall.
 3. **Declaration order third.** Two variants of one component that set the same property:
    the one declared later wins. Compound variants likewise, in array order.
-4. **Breakpoint order fourth.** Responsive rules for the same declaration are ordered by
-   the key order of `config.media`; a later breakpoint wins. `@initial` comes before all.
+4. **Breakpoint order fourth, within one variant only.** Media queries grant no priority of
+   their own, exactly as in hand-written CSS: two different variants are ordered by rule 3
+   whatever their breakpoints. For the values of one variant, rules follow the key order of
+   `config.media` (so a desktop-first max-width config works the same way), with `@initial`
+   first. Revised 2026-09-05 after review; the first draft was breakpoint-major.
 5. Themes and `globalCss` stay first, in their current positions.
 
 What stays unsolvable and is documented as such: two unrelated components merged via
@@ -595,13 +598,14 @@ What stays unsolvable and is documented as such: two unrelated components merged
 The sheet already works this way for 7 groups: each group is an empty `@media{}` block and
 rules are inserted into the right block. Extend that:
 
-- Groups become `themed`, `global`, then for each depth `d` in `0..7`: `d-styled`,
-  `d-onevar`, `d-resonevar`, `d-allvar`, then `inline`. 35 blocks instead of 7. Empty
-  blocks are free. Depth beyond 7 clamps to 7 (composition that deep is theoretical).
+- Groups become `themed`, `global`, then for each depth `d` in `0..7`: `styled{d}`,
+  `variants{d}` (responsive and non-responsive together, ordered by key), `compound{d}`, then
+  `inline`. 26 blocks instead of 7. Empty blocks are free. Depth beyond 7 clamps to 7.
 - Within a group, rules are no longer appended. Each rule carries a sort key
-  `(declarationIndex, mediaIndex)`; the group keeps a parallel sorted key list and inserts
-  at the binary-searched position. Both indices are known at render time: the variant's
-  position in the composer, and the media key's position in `config.media`.
+  `(declarationIndex, mediaIndex, valueIndex)` encoded as one number; the group keeps a parallel
+  sorted key list and inserts at the binary-searched position. All three are known at render
+  time: the variant name's position in the component definition, the media key's position in
+  `config.media`, and the value's position within the variant.
 - The hydration marker gains the key: `--sxs{--sxs:<group> class@key class@key ...}`, so
   rules injected after hydration land in the right place relative to server-rendered ones.
   The marker stays parseable by the same code path.
@@ -633,7 +637,8 @@ rest are the ones that were already flaky across navigation.
 |---|---|---|---|
 | `styled(A, { color })` where `A` has a variant setting `color` | variant wins (needed `!important`) | extension wins | remove the `!important` |
 | Two variants of one component set the same property | first rendered wins | later declared wins | reorder the variant declarations, or use a compound variant |
-| Responsive values at two breakpoints from different renders | first rendered wins | later breakpoint wins | none; this is the intended result |
+| Two breakpoints of one variant, rendered in different orders | first rendered wins | later one in `config.media` wins | none; this is the intended result |
+| Two different variants, one responsive | responsive one wins (separate later group) | later-declared one wins, media or not | reorder declarations if the responsive one should win |
 | Same style object reused at different depths (#1039) | first rendered wins | deeper wins | none |
 | `css()` class passed via `className` to override a variant (#1060) | variant wins | still variant wins (depth of the receiving component) | use the `css` prop or extend the component |
 

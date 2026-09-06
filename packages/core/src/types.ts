@@ -99,8 +99,8 @@ export interface SheetGroup {
 // Variant / Composer types
 // ---------------------------------------------------------------------------
 
-/** Variant definition: [matchConditions, style, isEmpty, styleHash, responsiveStyleHashes] */
-export type VariantDef = [Record<string, string>, CSSObject, boolean, string, Map<string, string>]
+/** Variant definition: [matchConditions, style, isEmpty, styleHash, responsiveStyleHashes, declarationIndex] where declarationIndex is the position of the variant name (or of the compound variant) in the component definition */
+export type VariantDef = [Record<string, string>, CSSObject, boolean, string, Map<string, string>, number]
 
 /** Composer tuple: [className, style, singularVariants, compoundVariants, prefilledVariants, undefinedVariants] */
 export type ComposerTuple = [string, CSSObject, VariantDef[], VariantDef[], Record<string, string>, string[]]

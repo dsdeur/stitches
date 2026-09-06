@@ -14,22 +14,25 @@ import { getNonce } from './utility/getNonce.ts'
  */
 export const legacyNames: readonly string[] = ['themed', 'global', 'styled', 'onevar', 'resonevar', 'allvar', 'inline']
 
-/** Kinds that get one group per composition depth in the declared cascade. */
+/** Kinds that get one group per composition depth in the declared cascade. Responsive and non-responsive variants share one group there, ordered by sort key. */
 const depthKinds: readonly RuleKind[] = ['styled', 'onevar', 'resonevar', 'allvar']
+const declaredGroupOfKind: Record<string, string> = { styled: 'styled', onevar: 'variants', resonevar: 'variants', allvar: 'compound' }
+const declaredDepthGroups = ['styled', 'variants', 'compound']
 
 /** Deepest composition level with its own groups; deeper composers share the last one. */
 export const maxDepth = 7
 
 /**
- * Declared cascade. Themes and globals first, then for each composition depth the four component
- * groups (so everything of a deeper composer beats everything of a shallower one), then inline.
- * Within a group, rules are inserted at a position given by a sort key (declaration and
- * breakpoint order) instead of being appended, so the sheet does not depend on render order.
+ * Declared cascade. Themes and globals first, then for each composition depth three groups
+ * (base, variants, compound variants) so everything of a deeper composer beats everything of a
+ * shallower one, then inline. Within a group, rules are inserted at a position given by a sort key
+ * (declaration order, then breakpoint order within one variant) instead of being appended, so the
+ * sheet does not depend on render order and media queries grant no priority of their own.
  */
-export const declaredNames: readonly string[] = ['themed', 'global', ...Array.from({ length: maxDepth + 1 }, (_, depth) => depthKinds.map((kind) => `${kind}${depth}`)).flat(), 'inline']
+export const declaredNames: readonly string[] = ['themed', 'global', ...Array.from({ length: maxDepth + 1 }, (_, depth) => declaredDepthGroups.map((group) => `${group}${depth}`)).flat(), 'inline']
 
 /** Returns the name of the group a rule of the given kind and composition depth belongs to. */
-export const getGroupName = (cascade: Cascade, kind: RuleKind, depth: number): string => (cascade === 'declared' && depthKinds.includes(kind) ? `${kind}${Math.min(depth, maxDepth)}` : kind)
+export const getGroupName = (cascade: Cascade, kind: RuleKind, depth: number): string => (cascade === 'declared' && depthKinds.includes(kind) ? `${declaredGroupOfKind[kind]}${Math.min(depth, maxDepth)}` : kind)
 
 const isSheetAccessible = (sheet: CSSStyleSheet): boolean => {
 	if (sheet.href && !sheet.href.startsWith(location.origin)) {

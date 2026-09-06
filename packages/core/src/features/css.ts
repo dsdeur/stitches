@@ -118,6 +118,8 @@ const createComposer = (styleConfig: CSSObject, config: StitchesConfig, { compon
 	}
 
 	if (initSingularVariants) {
+		let nameIndex = 0
+
 		for (const name in initSingularVariants) {
 			if (!hasOwn(prefilledVariants, name)) prefilledVariants[name] = 'undefined'
 
@@ -130,8 +132,10 @@ const createComposer = (styleConfig: CSSObject, config: StitchesConfig, { compon
 
 				const vStyle = variantPairs[pair]
 
-				singularVariants.push([vMatch, vStyle, !hasNames(vStyle), toHash(vStyle), new Map()])
+				singularVariants.push([vMatch, vStyle, !hasNames(vStyle), toHash(vStyle), new Map(), nameIndex])
 			}
+
+			++nameIndex
 		}
 	}
 
@@ -144,7 +148,7 @@ const createComposer = (styleConfig: CSSObject, config: StitchesConfig, { compon
 			const resolvedMatch: Record<string, string> = {}
 			for (const name in vMatch) resolvedMatch[name] = String(vMatch[name])
 
-			compoundVariants.push([resolvedMatch, resolvedStyle, !hasNames(resolvedStyle), toHash(resolvedStyle), new Map()])
+			compoundVariants.push([resolvedMatch, resolvedStyle, !hasNames(resolvedStyle), toHash(resolvedStyle), new Map(), compoundVariants.length])
 		}
 	}
 
@@ -318,14 +322,18 @@ const getPreparedDataFromComposers = (composers: Iterable<ComposerTuple>): [stri
 /** [className suffix, style, isResponsive, styleHash, sortKey] where sortKey orders rules within a group in the declared cascade. */
 type ResolvedVariant = [string, CSSObject, boolean, string, number]
 
-/** Sort key: breakpoint-major (non-responsive first, then media in config order, raw queries last), declaration order within a breakpoint. */
-const toSortKey = (mediaIndex: number, declarationIndex: number): number => (mediaIndex + 1) * 10000 + declarationIndex
+/**
+ * Sort key, as plain CSS source order would have it: the declaration order of the variant (or
+ * compound variant) first; then, for one variant, its breakpoints in config.media order
+ * (non-responsive first, raw queries last); then the order of the variant's values.
+ */
+const toSortKey = (declarationIndex: number, mediaIndex: number, valueIndex: number): number => declarationIndex * 100000000 + (mediaIndex + 1) * 10000 + valueIndex
 
 const getTargetVariantsToAdd = (targetVariants: VariantDef[], variantProps: Record<string, string | Record<string, string>>, media: Record<string, string>, mediaOrder: Map<string, number>, isCompoundVariant?: boolean): (ResolvedVariant[] | undefined)[] => {
 	const targetVariantsToAdd: (ResolvedVariant[] | undefined)[] = []
 
-	targetVariants: for (let declarationIndex = 0; declarationIndex < targetVariants.length; ++declarationIndex) {
-		const [vMatch, initialVStyle, vEmpty, initialVHash, responsiveStyleHashes] = targetVariants[declarationIndex]
+	targetVariants: for (let valueIndex = 0; valueIndex < targetVariants.length; ++valueIndex) {
+		const [vMatch, initialVStyle, vEmpty, initialVHash, responsiveStyleHashes, declarationIndex] = targetVariants[valueIndex]
 
 		if (vEmpty) continue
 
@@ -388,8 +396,8 @@ const getTargetVariantsToAdd = (targetVariants: VariantDef[], variantProps: Reco
 		const bucket = (targetVariantsToAdd[vOrder] = targetVariantsToAdd[vOrder] || [])
 		// A value that matches at @initial and again at a breakpoint is wrapped in @media below,
 		// which would drop it below the first breakpoint. Emit the unwrapped rule for @initial as well.
-		if (isResponsive && matchesInitial) bucket.push([vClass, initialVStyle, false, initialVHash, toSortKey(-1, declarationIndex)])
-		bucket.push([vClass, vStyle, isResponsive, vHash, toSortKey(mediaIndex, declarationIndex)])
+		if (isResponsive && matchesInitial) bucket.push([vClass, initialVStyle, false, initialVHash, toSortKey(declarationIndex, -1, valueIndex)])
+		bucket.push([vClass, vStyle, isResponsive, vHash, toSortKey(declarationIndex, mediaIndex, valueIndex)])
 	}
 
 	return targetVariantsToAdd

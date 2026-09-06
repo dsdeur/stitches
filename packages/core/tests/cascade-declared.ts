@@ -117,8 +117,8 @@ describe("cascade: 'declared'", () => {
 		X({ size: { '@md': 'sm' } })
 
 		const cssText = getCssText()
-		expect(/--sxs\{--sxs:\d+ c-PJLV-\w+-size-lg;--sxsk:1\}/.test(cssText)).toBe(true)
-		expect(/--sxs\{--sxs:\d+ c-PJLV-\w+-size-sm;--sxsk:10000\}/.test(cssText)).toBe(true)
+		// both rules share the depth-0 variants group; keys are (declaration, breakpoint, value) encoded as one number
+		expect(/--sxs\{--sxs:\d+ c-PJLV-\w+-size-lg c-PJLV-\w+-size-sm;--sxsk:1 10000\}/.test(cssText)).toBe(true)
 	})
 
 	test('legacy markers are unchanged', () => {
@@ -126,5 +126,41 @@ describe("cascade: 'declared'", () => {
 		css({ variants: { size: { lg: { fontSize: 16 } } } })({ size: 'lg' })
 
 		expect(getCssText().includes('--sxsk')).toBe(false)
+	})
+})
+
+describe("cascade: 'declared' follows source order, media queries grant no priority", () => {
+	test('a later-declared variant beats an earlier one even when the earlier one applies at a wider breakpoint', () => {
+		const { css, getCssText } = createStitches({ cascade: 'declared', media })
+		const Box = css({ variants: { first: { on: { color: 'red' } }, second: { on: { color: 'blue' } } } })
+
+		Box({ first: { '@lg': 'on' }, second: { '@md': 'on' } })
+
+		const cssText = rules(getCssText)
+		// first@lg is declared first, so it comes first; second@md wins wherever both apply
+		expect(position(cssText, '{color:red}') < position(cssText, '{color:blue}')).toBe(true)
+	})
+
+	test('a later-declared plain variant beats an earlier responsive one', () => {
+		const { css, getCssText } = createStitches({ cascade: 'declared', media })
+		const Box = css({ variants: { first: { on: { color: 'red' } }, second: { on: { color: 'blue' } } } })
+
+		Box({ first: { '@md': 'on' }, second: 'on' })
+
+		const cssText = rules(getCssText)
+		expect(position(cssText, '{color:red}') < position(cssText, '{color:blue}')).toBe(true)
+	})
+
+	test('breakpoint order within one variant is the config order, so desktop-first max-width configs work the same', () => {
+		const desktopFirst = { desktop: '(max-width: 1200px)', tablet: '(max-width: 900px)', phone: '(max-width: 600px)' }
+		const { css, getCssText } = createStitches({ cascade: 'declared', media: desktopFirst })
+		const Text = css({ variants: { size: { s: { fontSize: 12 }, m: { fontSize: 14 }, l: { fontSize: 16 } } } })
+
+		Text({ size: { '@phone': 's' } })
+		Text({ size: { '@desktop': 'l', '@tablet': 'm' } })
+
+		const cssText = rules(getCssText)
+		expect(position(cssText, '(max-width: 1200px)') < position(cssText, '(max-width: 900px)')).toBe(true)
+		expect(position(cssText, '(max-width: 900px)') < position(cssText, '(max-width: 600px)')).toBe(true)
 	})
 })
