@@ -1,0 +1,71 @@
+{
+  "$comment": "Tests that are permitted to differ when the whole suite runs with cascade 'declared' forced on (yarn test:declared). Every entry names one intended change and the test that asserts the new outcome from the rule. Anything not listed here must be identical in both cascades; a listed test that stops differing must be removed. Keys are '<file> > <full test name>' as the vitest JSON reporter emits them.",
+  "allowed": [
+    {
+      "test": "packages/core/tests/component-responsive-initial.ts > Responsive variants whose @initial value repeats at a breakpoint the @initial value is applied even when a later breakpoint uses the same value (upstream #1146)",
+      "change": "marker layout",
+      "reason": "Asserts the legacy container number (--sxs:3) of the non-responsive variant group. In 'declared' responsive and non-responsive variants share one container per depth.",
+      "pairedWith": "packages/core/tests/cascade-declared.ts > markers carry the rule sort keys so a hydrating client can keep positioning"
+    },
+    {
+      "test": "packages/core/tests/component-responsive-initial.ts > Responsive variants whose @initial value repeats at a breakpoint the same value at @initial and a breakpoint applies at both (upstream #896)",
+      "change": "marker layout",
+      "reason": "Same as above: asserts the legacy container number.",
+      "pairedWith": "packages/core/tests/cascade-declared.ts > markers carry the rule sort keys so a hydrating client can keep positioning"
+    },
+    {
+      "test": "packages/core/tests/component-responsive-initial.ts > Responsive variants whose @initial value repeats at a breakpoint a breakpoint value that differs from @initial does not get an unwrapped rule",
+      "change": "marker layout",
+      "reason": "Same as above: asserts the legacy container number.",
+      "pairedWith": "packages/core/tests/cascade-declared.ts > markers carry the rule sort keys so a hydrating client can keep positioning"
+    },
+    {
+      "test": "packages/core/tests/component-variants.ts > Variants Renders a component with 1 matching variant",
+      "change": "declaration order instead of first-render order",
+      "reason": "The component declares `color` before `size`; the test renders `size` first. Legacy emits size then color (render order); declared emits color then size (declaration order). Both rules target different properties, so no element looks different.",
+      "pairedWith": "packages/core/tests/cascade-declared-pairs.ts > component-variants: variants emit in declaration order, not render order"
+    },
+    {
+      "test": "packages/react/tests/component-variants.ts > Variants Renders a component with 1 matching variant",
+      "change": "declaration order instead of first-render order",
+      "reason": "React port of the entry above.",
+      "pairedWith": "packages/core/tests/cascade-declared-pairs.ts > component-variants: variants emit in declaration order, not render order"
+    },
+    {
+      "test": "packages/core/tests/component-variants.ts > Conditional variants Renders a component with a conditional inline variant repeatedly",
+      "change": "declaration order instead of first-render order",
+      "reason": "Second block declares `large` before `small`. Both media queries are raw strings (not config keys), so config order does not apply and value declaration order decides. The two queries are mutually exclusive ranges, so no element looks different.",
+      "pairedWith": "packages/core/tests/cascade-declared-pairs.ts > component-variants: raw media queries fall back to value declaration order"
+    },
+    {
+      "test": "packages/core/tests/issue-450.ts > Issue #450 Basic Tests ported from the React version Render component2()",
+      "change": "extension beats the variants of the component it extends",
+      "reason": "component2 extends component1. Its base rule now comes after component1's variant and compound rules instead of directly after component1's base rule.",
+      "pairedWith": "packages/core/tests/cascade-declared-pairs.ts > issue-450: an extension's base rule comes after the parent's variant and compound rules"
+    },
+    {
+      "test": "packages/core/tests/issue-450.ts > Issue #450 Basic Tests ported from the React version Render component2({ appearance: \"secondary\", color: \"lightBlue\" })",
+      "change": "extension beats the variants of the component it extends",
+      "reason": "Same as above with explicit props.",
+      "pairedWith": "packages/core/tests/cascade-declared-pairs.ts > issue-450: an extension's base rule comes after the parent's variant and compound rules"
+    },
+    {
+      "test": "packages/core/tests/issue-492.ts > Issue #492 Conditionally apply default variants as the @initial value",
+      "change": "declaration order instead of first-render order",
+      "reason": "Two values of the `sweet` variant at the same breakpoint: `caroline` is declared before `dreams`. Legacy emitted them in render order. One element carries one value per breakpoint, so no element looks different.",
+      "pairedWith": "packages/core/tests/cascade-declared-pairs.ts > issue-492: values of one variant at one breakpoint emit in declaration order"
+    },
+    {
+      "test": "packages/core/tests/issue-725.ts > Issue #725 Combination with other variants",
+      "change": "declaration order instead of first-render order",
+      "reason": "`justify` is declared before `color`, so justify rules come first; within `justify`, breakpoints follow config order (420 before 720/1536) instead of render order.",
+      "pairedWith": "packages/core/tests/cascade-declared-pairs.ts > issue-725: variants in declaration order, breakpoints of one variant in config order"
+    },
+    {
+      "test": "packages/core/tests/issue-725.ts > Issue #725 Test compound variants",
+      "change": "declaration order instead of first-render order",
+      "reason": "`variant` is declared before `disabled`, so its responsive rule comes first regardless of breakpoint.",
+      "pairedWith": "packages/core/tests/cascade-declared-pairs.ts > issue-725: a variant declared earlier emits first even at a narrower breakpoint"
+    }
+  ]
+}

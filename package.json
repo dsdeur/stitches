@@ -20,7 +20,8 @@
     "release": "node .task/release.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "test:declared": "node .task/test-declared.js"
   },
   "workspaces": [
     "packages/core",

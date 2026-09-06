@@ -1,5 +1,6 @@
 import type { StitchesInit, StitchesConfig, StitchesInstance, Cascade } from './types.ts'
 import { defaultThemeMap } from './default/defaultThemeMap.ts'
+import { defaultCascade } from './default/defaultCascade.ts'
 
 import { createMemo } from './utility/createMemo.ts'
 
@@ -42,7 +43,7 @@ export const createStitches = (init?: StitchesInit): StitchesInstance => {
 
 const createInstance = (initConfig: Omit<StitchesInit, 'root'>, root: SheetRoot | null): StitchesInstance => {
 	const prefix = initConfig.prefix ?? ''
-	const cascade: Cascade = initConfig.cascade ?? 'legacy'
+	const cascade: Cascade = initConfig.cascade ?? defaultCascade
 	const media = initConfig.media ?? {}
 	const theme = initConfig.theme ?? {}
 	const themeMap = initConfig.themeMap ?? { ...defaultThemeMap }

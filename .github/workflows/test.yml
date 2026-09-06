@@ -20,6 +20,8 @@ jobs:
         run: yarn typecheck
       - name: Run tests
         run: yarn test
+      - name: Run tests with the declared cascade forced on
+        run: yarn test:declared
       - name: Build
         run: yarn build
       - name: Lint

@@ -681,12 +681,18 @@ rest are the ones that were already flaky across navigation.
   #976, #1009, #885, #1060 become tests.
 - Parity: `'legacy'` mode must stay byte-identical to `next` for the parity fixture.
 - Hydration: server render in `'declared'`, hydrate, inject a new rule, assert position.
-- Whole-suite check (done 2026-09-05, not automated): run the entire existing suite with
-  `'declared'` as the default and compare sheet text ignoring markers and group wrappers.
-  Result: 260 of 274 tests identical; 5 differences cosmetic (marker text asserted directly);
-  9 intended ordering changes (declaration order instead of render order). Two real gaps this
-  found (variant name across depths, `styled(ReactComponent)`) are fixed and covered by tests.
-  Repeat this check whenever the declared cascade changes.
+- **Whole-suite check, automated (`yarn test:declared`, in CI).** The entire existing suite runs a
+  second time with `'declared'` forced on (`vitest.declared.config.ts` swaps the default; the
+  setup shim compares sheet text with hydration markers and container wrappers removed, so class
+  names and rule contents are compared verbatim and only rule order can differ). Every test that
+  differs must be listed in `packages/core/tests/declared-run/allowlist.json` with the intended
+  change it exercises and a paired test (`cascade-declared-pairs.ts`) asserting the new outcome
+  from the rule. The checker fails on any unlisted difference, any listed test that stops
+  differing, and any file error. State on 2026-09-05: 272 of 283 identical, 11 listed (3 assert the
+  legacy container number, 6 declaration-order, 2 extension-beats-parent-variants). The first
+  manual pass of this check found two real gaps (variant name across depths,
+  `styled(ReactComponent)`), fixed in PR #14. This is the migration baseline: the old tests are
+  never rewritten, and the allowlist is the exact list of what changes.
 
 ### 11.7 Open questions for review
 

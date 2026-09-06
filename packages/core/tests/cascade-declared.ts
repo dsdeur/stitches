@@ -25,7 +25,7 @@ describe("cascade: 'declared'", () => {
 	})
 
 	test("rule 1 in legacy mode is the other way around (the reason for 'declared')", () => {
-		const { css, getCssText } = createStitches()
+		const { css, getCssText } = createStitches({ cascade: 'legacy' })
 		const A = css({ color: 'black', variants: { tone: { muted: { color: 'gray' } } }, defaultVariants: { tone: 'muted' } })
 		const B = css(A, { color: 'red' })
 
