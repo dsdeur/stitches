@@ -588,6 +588,18 @@ Order is a pure function of what was declared, never of what rendered first.
    whatever their breakpoints. For the values of one variant, rules follow the key order of
    `config.media` (so a desktop-first max-width config works the same way), with `@initial`
    first. Revised 2026-09-05 after review; the first draft was breakpoint-major.
+
+Two refinements found by running the whole existing suite with `'declared'` as the default
+(2026-09-05):
+
+- **A variant name is one declaration across depths.** When an extension adds values or a
+  default to a variant the base declared (`styled(Base, { variants: { color: { orange } },
+  defaultVariants: { color: 'orange' } })`), all of that variant's rules sort by the depth and
+  position where the name was first declared; values added deeper sort after inherited ones.
+  Otherwise the extension's default would beat a responsive value from the base.
+- **`styled(ReactComponent, ...)` ranks as the outermost layer.** Stitches cannot see the depth
+  of what a React component renders, so such a component uses the deepest group; the
+  deferred injector keeps legacy order among several of them.
 5. Themes and `globalCss` stay first, in their current positions.
 
 What stays unsolvable and is documented as such: two unrelated components merged via
@@ -640,6 +652,7 @@ rest are the ones that were already flaky across navigation.
 | Two breakpoints of one variant, rendered in different orders | first rendered wins | later one in `config.media` wins | none; this is the intended result |
 | Two different variants, one responsive | responsive one wins (separate later group) | later-declared one wins, media or not | reorder declarations if the responsive one should win |
 | Same style object reused at different depths (#1039) | first rendered wins | deeper wins | none |
+| Extension adds a default to an inherited variant, base value used responsively (issue-450) | responsive value wins | responsive value wins (variant sorts with its first declaration) | none |
 | `css()` class passed via `className` to override a variant (#1060) | variant wins | still variant wins (depth of the receiving component) | use the `css` prop or extend the component |
 
 ### 11.5 Migration tooling and guidance
@@ -668,6 +681,12 @@ rest are the ones that were already flaky across navigation.
   #976, #1009, #885, #1060 become tests.
 - Parity: `'legacy'` mode must stay byte-identical to `next` for the parity fixture.
 - Hydration: server render in `'declared'`, hydrate, inject a new rule, assert position.
+- Whole-suite check (done 2026-09-05, not automated): run the entire existing suite with
+  `'declared'` as the default and compare sheet text ignoring markers and group wrappers.
+  Result: 260 of 274 tests identical; 5 differences cosmetic (marker text asserted directly);
+  9 intended ordering changes (declaration order instead of render order). Two real gaps this
+  found (variant name across depths, `styled(ReactComponent)`) are fixed and covered by tests.
+  Repeat this check whenever the declared cascade changes.
 
 ### 11.7 Open questions for review
 

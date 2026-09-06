@@ -164,3 +164,29 @@ describe("cascade: 'declared' follows source order, media queries grant no prior
 		expect(position(cssText, '(max-width: 900px)') < position(cssText, '(max-width: 600px)')).toBe(true)
 	})
 })
+
+describe("cascade: 'declared' treats a variant name as one declaration across composition depths", () => {
+	test('a responsive value from the base component still beats a default added by the extension (issue-450 pattern)', () => {
+		const { css, getCssText } = createStitches({ cascade: 'declared', media })
+		const Base = css({ variants: { color: { red: { color: 'red' }, blue: { color: 'blue' } } }, defaultVariants: { color: 'red' } })
+		const Extended = css(Base, { variants: { color: { orange: { color: 'orange' } } }, defaultVariants: { color: 'orange' } })
+
+		Extended({ color: { '@md': 'blue' } })
+
+		const cssText = rules(getCssText)
+		// default orange applies below md; blue must come later so it wins from md up
+		expect(position(cssText, '{color:orange}') < position(cssText, '@media (min-width: 768px)')).toBe(true)
+	})
+
+	test('values an extension adds to an inherited variant sort after the inherited values', () => {
+		const { css, getCssText } = createStitches({ cascade: 'declared' })
+		const Base = css({ variants: { size: { sm: { fontSize: 12 } } } })
+		const Extended = css(Base, { variants: { size: { xl: { fontSize: 24 } } } })
+
+		Extended({ size: 'xl' })
+		Extended({ size: 'sm' })
+
+		const cssText = rules(getCssText)
+		expect(position(cssText, '{font-size:12px}') < position(cssText, '{font-size:24px}')).toBe(true)
+	})
+})

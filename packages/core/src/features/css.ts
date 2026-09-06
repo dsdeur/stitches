@@ -24,7 +24,7 @@ import { hasOwn } from '../utility/hasOwn.ts'
 import { toCssRules } from '../convert/toCssRules.ts'
 import { toHash } from '../convert/toHash.ts'
 import { toTailDashed } from '../convert/toTailDashed.ts'
-import { createRulesInjectionDeferrer, getGroupName } from '../sheet.ts'
+import { createRulesInjectionDeferrer, getGroupName, maxDepth } from '../sheet.ts'
 
 const createCssFunctionMap = createMemo()
 
@@ -171,6 +171,31 @@ const createRenderer = (config: StitchesConfig, internals: ResolvedInternals, sh
 	const deferredInjector: InjectionDeferrer | null = hasReactType ? createRulesInjectionDeferrer(sheet) : null
 	const injectionTarget = (deferredInjector || sheet).rules
 
+	// A component wrapping a React component cannot see the stitches depth of what that component
+	// renders, so it ranks as the outermost layer (the deferred injector keeps legacy order within it).
+	const baseDepth = hasReactType ? maxDepth : 0
+
+	/**
+	 * A variant name is one declaration even when an extension adds values (or a default) for it, so all
+	 * of its rules sort by the depth and position where the name was first declared.
+	 */
+	const variantHomes = new Map<string, VariantHome>()
+	const composerHomes: VariantHome[][] = []
+	{
+		let depth = baseDepth
+		for (const [, , singularVariants] of internals.composers) {
+			const homes: VariantHome[] = []
+			for (const [vMatch, , , , , nameIndex] of singularVariants) {
+				const name = Object.keys(vMatch)[0]
+				let home = variantHomes.get(name)
+				if (!home) variantHomes.set(name, (home = { depth, index: nameIndex }))
+				homes.push(home)
+			}
+			composerHomes.push(homes)
+			++depth
+		}
+	}
+
 	const selector = `${toClassSelector(baseClassName)}${baseClassNames.length > 1 ? `:where(${baseClassNames.slice(1).map(toClassSelector).join('')})` : ``}`
 
 	/** Injects the rules for a class into the group of the given kind and composition depth, once. */
@@ -218,39 +243,41 @@ const createRenderer = (config: StitchesConfig, internals: ResolvedInternals, sh
 		const classSet = new Set([...baseClassNames])
 
 		// Composers are visited base-first, so the position in the set is the composition depth.
-		let depth = 0
+		let depth = baseDepth
+		let composerIndex = 0
 
 		for (const [composerBaseClass, composerBaseStyle, singularVariants, compoundVariants] of internals.composers) {
 			inject('styled', depth, composerBaseClass, composerBaseStyle, 0)
 
-			const singularVariantsToAdd = getTargetVariantsToAdd(singularVariants, variantProps, config.media, mediaOrder)
-			const compoundVariantsToAdd = getTargetVariantsToAdd(compoundVariants, variantProps, config.media, mediaOrder, true)
+			const singularVariantsToAdd = getTargetVariantsToAdd(singularVariants, composerHomes[composerIndex], depth, variantProps, config.media, mediaOrder)
+			const compoundVariantsToAdd = getTargetVariantsToAdd(compoundVariants, null, depth, variantProps, config.media, mediaOrder, true)
 
 			for (const variantToAdd of singularVariantsToAdd) {
 				if (variantToAdd === undefined) continue
 
-				for (const [vClass, vStyle, isResponsive, vHash, sortKey] of variantToAdd) {
+				for (const [vClass, vStyle, isResponsive, vHash, sortKey, groupDepth] of variantToAdd) {
 					const variantClassName = `${composerBaseClass}-${vHash}-${vClass}`
 
 					classSet.add(variantClassName)
 
-					inject(isResponsive ? 'resonevar' : 'onevar', depth, variantClassName, vStyle, sortKey)
+					inject(isResponsive ? 'resonevar' : 'onevar', groupDepth, variantClassName, vStyle, sortKey)
 				}
 			}
 
 			for (const variantToAdd of compoundVariantsToAdd) {
 				if (variantToAdd === undefined) continue
 
-				for (const [vClass, vStyle, , vHash, sortKey] of variantToAdd) {
+				for (const [vClass, vStyle, , vHash, sortKey, groupDepth] of variantToAdd) {
 					const variantClassName = `${composerBaseClass}-${vHash}-${vClass}`
 
 					classSet.add(variantClassName)
 
-					inject('allvar', depth, variantClassName, vStyle, sortKey)
+					inject('allvar', groupDepth, variantClassName, vStyle, sortKey)
 				}
 			}
 
 			++depth
+			++composerIndex
 		}
 
 		// apply css property styles
@@ -284,7 +311,7 @@ const createRenderer = (config: StitchesConfig, internals: ResolvedInternals, sh
 	}
 
 	const toString = () => {
-		if (!sheet.rules[getGroupName(config.cascade, 'styled', 0)].cache.has(baseClassName)) render()
+		if (!sheet.rules[getGroupName(config.cascade, 'styled', baseDepth)].cache.has(baseClassName)) render()
 
 		return baseClassName
 	}
@@ -319,8 +346,14 @@ const getPreparedDataFromComposers = (composers: Iterable<ComposerTuple>): [stri
 	return [baseClassName, baseClassNames, combinedPrefilledVariants, new Set(combinedUndefinedVariants)]
 }
 
-/** [className suffix, style, isResponsive, styleHash, sortKey] where sortKey orders rules within a group in the declared cascade. */
-type ResolvedVariant = [string, CSSObject, boolean, string, number]
+/** Where a variant name was first declared: the composition depth and the position among that composer's variant names. */
+interface VariantHome {
+	depth: number
+	index: number
+}
+
+/** [className suffix, style, isResponsive, styleHash, sortKey, groupDepth]; sortKey orders rules within a group in the declared cascade, groupDepth picks the depth group. */
+type ResolvedVariant = [string, CSSObject, boolean, string, number, number]
 
 /**
  * Sort key, as plain CSS source order would have it: the declaration order of the variant (or
@@ -329,13 +362,20 @@ type ResolvedVariant = [string, CSSObject, boolean, string, number]
  */
 const toSortKey = (declarationIndex: number, mediaIndex: number, valueIndex: number): number => declarationIndex * 100000000 + (mediaIndex + 1) * 10000 + valueIndex
 
-const getTargetVariantsToAdd = (targetVariants: VariantDef[], variantProps: Record<string, string | Record<string, string>>, media: Record<string, string>, mediaOrder: Map<string, number>, isCompoundVariant?: boolean): (ResolvedVariant[] | undefined)[] => {
+const getTargetVariantsToAdd = (targetVariants: VariantDef[], homes: VariantHome[] | null, composerDepth: number, variantProps: Record<string, string | Record<string, string>>, media: Record<string, string>, mediaOrder: Map<string, number>, isCompoundVariant?: boolean): (ResolvedVariant[] | undefined)[] => {
 	const targetVariantsToAdd: (ResolvedVariant[] | undefined)[] = []
 
 	targetVariants: for (let valueIndex = 0; valueIndex < targetVariants.length; ++valueIndex) {
-		const [vMatch, initialVStyle, vEmpty, initialVHash, responsiveStyleHashes, declarationIndex] = targetVariants[valueIndex]
+		const [vMatch, initialVStyle, vEmpty, initialVHash, responsiveStyleHashes, ownIndex] = targetVariants[valueIndex]
 
 		if (vEmpty) continue
+
+		// Singular variants sort with the first declaration of their name (which may be a shallower composer);
+		// values added by deeper composers sort after the shallower ones. Compound variants stay at their own depth.
+		const home = homes ? homes[valueIndex] : null
+		const groupDepth = home ? home.depth : composerDepth
+		const declarationIndex = home ? home.index : ownIndex
+		const orderedValueIndex = (composerDepth - groupDepth) * 1000 + valueIndex
 
 		let vStyle = initialVStyle
 		let vOrder = 0
@@ -396,8 +436,8 @@ const getTargetVariantsToAdd = (targetVariants: VariantDef[], variantProps: Reco
 		const bucket = (targetVariantsToAdd[vOrder] = targetVariantsToAdd[vOrder] || [])
 		// A value that matches at @initial and again at a breakpoint is wrapped in @media below,
 		// which would drop it below the first breakpoint. Emit the unwrapped rule for @initial as well.
-		if (isResponsive && matchesInitial) bucket.push([vClass, initialVStyle, false, initialVHash, toSortKey(declarationIndex, -1, valueIndex)])
-		bucket.push([vClass, vStyle, isResponsive, vHash, toSortKey(declarationIndex, mediaIndex, valueIndex)])
+		if (isResponsive && matchesInitial) bucket.push([vClass, initialVStyle, false, initialVHash, toSortKey(declarationIndex, -1, orderedValueIndex), groupDepth])
+		bucket.push([vClass, vStyle, isResponsive, vHash, toSortKey(declarationIndex, mediaIndex, orderedValueIndex), groupDepth])
 	}
 
 	return targetVariantsToAdd
