@@ -43,7 +43,7 @@ const shimmed = (actual: unknown) => ({
 	toEqual(expected: unknown) {
 		return isSheetText(actual) || isSheetText(expected) ? original(unwrapContainers(String(actual))).toEqual(unwrapContainers(String(expected))) : original(actual).toEqual(expected)
 	},
-	toBeInstanceOf(expected: Parameters<ReturnType<typeof original>['toBeInstanceOf']>[0]) {
+	toBeInstanceOf(expected: abstract new (...args: never[]) => unknown) {
 		return original(actual).toBeInstanceOf(expected)
 	},
 	get not() {
