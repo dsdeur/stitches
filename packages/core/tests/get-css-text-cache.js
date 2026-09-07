@@ -121,3 +121,36 @@ describe('getCssText() serializes the css it applied, not the css the browser re
 		expect(getCssText().includes('--space-1:12px')).toBe(true)
 	})
 })
+
+describe('Hydrating a stylesheet that has empty groups', () => {
+	/** A preloaded sheet holding a marker and an empty grouping rule, serialized the way a browser does. */
+	const createHydratableRoot = () => {
+		const group = { type: 4, cssRules: [], insertRule(text, index) { this.cssRules.splice(index, 0, { type: 1, cssText: text }) }, cssText: '@media  {\n}' }
+		const cssRules = [{ type: 1, cssText: '--sxs{--sxs:2 c-known}' }, group]
+
+		return {
+			nodeType: 11,
+			styleSheets: [{ cssRules, insertRule(text, index) { cssRules.splice(index, 0, { type: 1, cssText: text }) }, deleteRule(index) { cssRules.splice(index, 1) } }],
+			ownerDocument: { createElement: () => ({ setAttribute() {}, sheet: null }) },
+			appendChild: (element) => element,
+		}
+	}
+
+	test('an empty group is not emitted as a bare wrapper', () => {
+		// A real empty grouping rule serializes as `@media {}` with browser whitespace. That is not
+		// content, and emitting it produced stray `@media  {}` blocks in getCssText() output.
+		const { getCssText } = createStitches({ root: createHydratableRoot() })
+
+		expect(getCssText().includes('@media  ')).toBe(false)
+		expect(getCssText()).toBe('')
+	})
+
+	test('a rule rendered after hydration still comes out', () => {
+		const { css, getCssText } = createStitches({ root: createHydratableRoot() })
+
+		css({ color: 'red' })()
+
+		expect(getCssText().includes('color:red')).toBe(true)
+		expect(getCssText().includes('@media  ')).toBe(false)
+	})
+})

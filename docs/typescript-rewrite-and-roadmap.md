@@ -689,6 +689,9 @@ rest are the ones that were already flaky across navigation.
   #976, #1009, #885, #1060 become tests.
 - Parity: `'legacy'` mode must stay byte-identical to `next` for the parity fixture.
 - Hydration: server render in `'declared'`, hydrate, inject a new rule, assert position.
+- Real browser (`yarn test:browser`, added 2026-09-05): Chromium via Playwright, six checks over
+  both cascades covering resolved styles and `getCssText()` equality with the server. Not in CI
+  (browser download); run before publishing. See `docs/bench/README.md`.
 - **Whole-suite check, automated (`yarn test:declared`, in CI).** The entire existing suite runs a
   second time with `'declared'` forced on (`vitest.declared.config.ts` swaps the default; the
   setup shim compares sheet text with hydration markers and container wrappers removed, so class

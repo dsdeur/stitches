@@ -164,9 +164,13 @@ export const createSheet = (root: (DocumentOrShadowRoot & Node) | null, cascade:
 				// Best effort: these rules were written by the server and parsed by the browser, so their
 				// text is whatever the browser serializes. Rules injected from here on use our own text.
 				const hydratedTexts = Array.from({ length: groupRule.cssRules.length }, (_, ruleIndex) => groupRule.cssRules[ruleIndex].cssText)
-				// Nothing readable inside, but the sheet still reports text for the group (a preloaded
-				// stylesheet that is not a real CSSOM). Keep it so getCssText() does not lose content.
-				const hydratedCssText = !hydratedTexts.length ? groupRule.cssText : undefined
+				// Nothing readable inside, but the sheet may still report text for the group (a preloaded
+				// stylesheet that is not a real CSSOM). Keep it so getCssText() does not lose content,
+				// but not when it is just an empty wrapper: a real empty grouping rule serializes as
+				// `@media {}` with browser whitespace, which is not content.
+				const groupCssText = groupRule.cssText ?? ''
+				const wrapped = groupCssText.slice(groupCssText.indexOf('{') + 1, groupCssText.lastIndexOf('}'))
+				const hydratedCssText = !hydratedTexts.length && wrapped.trim() ? groupCssText : undefined
 
 				groupSheet.sheet = existingSheet
 				groupSheet.rules[groupName] = { group: groupRule, index, cache: new Set(cache), keys: hydratedKeys, texts: hydratedTexts, hydratedCssText, apply: noop }

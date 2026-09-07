@@ -66,3 +66,17 @@ Measured 2026-09-05: `bundler` 0 errors, `nodenext` 0 errors (3 before the missi
 extension in `packages/react/types/stitches.d.ts` was added), legacy `node` 0 errors apart from
 TypeScript 6 deprecating the option itself. `packages/core/tests/public-types-imports.js` guards
 the extension rule so it cannot regress silently.
+
+## Real-browser check (run before publishing)
+
+`yarn test:browser` (`browser-check.mts`, needs `yarn build` first) drives Chromium through
+Playwright and verifies the two things the node suite cannot reach: rules inserted at computed
+positions inside a live grouping rule, and what the browser actually resolves for an element. It
+checks, in both cascades, that an extension does or does not beat its parent's variant per the
+mode, that reverse render order still resolves by declaration in `declared`, and that
+`getCssText()` in the browser is byte-identical to the server output. Each check runs in its own
+page, because an instance rooted at the document hydrates markers a previous instance left there.
+
+It is not in CI, since it needs a browser download; adding it is a `npx playwright install
+chromium` step plus `yarn test:browser`. It has already earned its keep: it found that a hydrated
+but empty group was emitted as a bare `@media {}` wrapper, now guarded by a node test too.
