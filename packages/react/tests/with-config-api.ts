@@ -4,7 +4,7 @@ import * as renderer from 'react-test-renderer'
 import type { ReactTestRendererJSON } from 'react-test-renderer'
 import { createStitches } from '../src/index.ts'
 
-function render(component: { render?: (props?: Record<string, unknown>, ref?: unknown) => ReactElement | null }, props?: Record<string, unknown>): ReactElement {
+function render(component: { render?: (props?: Record<string, unknown>, ref?: unknown) => ReactElement<Record<string, unknown>> | null }, props?: Record<string, unknown>): ReactElement<Record<string, unknown>> {
 	if (!component.render) throw new Error('render is undefined')
 	const result = component.render(props)
 	if (result === null) throw new Error('render returned null')

@@ -18,7 +18,7 @@ export type StyledComponent = React.ForwardRefExoticComponent<Record<string, unk
 	className: string
 	selector: string
 	/** The forwardRef render function — present at runtime but not in React's types */
-	render?: (props?: Record<string, unknown>, ref?: unknown) => React.ReactElement | null
+	render?: (props?: Record<string, unknown>, ref?: unknown) => React.ReactElement<Record<string, unknown>> | null
 } & { [K in typeof internal]: ComponentInternals }
 
 
@@ -41,7 +41,9 @@ export const createStyledFunction = ({ config, sheet }: { config: StitchesConfig
 					delete forwardProps.as
 				}
 
-				forwardProps.ref = ref
+				// React 19 treats `ref` as an ordinary prop, so assigning it unconditionally would put
+				// `ref: null` on every element. Only forward a ref the caller actually gave us.
+				if (ref !== null && ref !== undefined) forwardProps.ref = ref
 
 				if (deferredInjector) {
 					return React.createElement(React.Fragment, null, React.createElement(Type, forwardProps), React.createElement(deferredInjector, null))

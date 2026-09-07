@@ -88,7 +88,7 @@ What each dev dependency is really for, and the verdict:
 | Lint | `eslint` 7, `@typescript-eslint/*` 5 | **Done 2026-09-05:** replaced by oxlint (`.oxlintrc.json`). |
 | Package hygiene | `@skypack/package-check` | **Done 2026-09-05:** replaced by publint (`yarn lint:pkg`, runs after build). |
 | Type generation | `csstype` | Keep. `types/css.d.ts` is generated from it by `.task/build-csstype.js`. |
-| React tests | `react` 17, `react-test-renderer` 17, `@types/react*` 17 | Upgrade to 19 with Vitest. `react-test-renderer` is deprecated in 19; tests move to `react-dom/server` / `react-dom/client` under jsdom. |
+| React tests | `react` 17, `react-test-renderer` 17, `@types/react*` 17 | **Done 2026-09-05:** on 19. `react-test-renderer` 19 is deprecated but still published and still works, so the test suite is unchanged rather than rewritten onto `react-dom` under jsdom; that migration is still open. The upgrade found one real incompatibility, below. |
 | Core | `typescript`, `prettier`, `@types/node` | Keep. Bump `@types/node` to the chosen Node version. |
 
 ### Build: tsdown (or tsup), not Vite
@@ -397,7 +397,7 @@ list; it now points here. Items marked done stay for context.
    missing `.js` extension in react's `stitches.d.ts`, which broke every `nodenext` consumer; fixed,
    with a test guarding the rule. Publishing goes to GitHub Packages (section 9).
 2. Toolchain replacement (section 2b): Vitest, then tsdown, then eslint flat config +
-   publint, then React 19 for tests. Vitest, tsdown, oxlint and publint done 2026-09-05; React 19 for tests remains. May run in parallel with 3 to 5; runtime PRs open at
+   publint, then React 19 for tests. Vitest, tsdown, oxlint, publint and React 19 done 2026-09-05; moving the react tests off the deprecated react-test-renderer remains. May run in parallel with 3 to 5; runtime PRs open at
    the same time rebase onto it.
 3. Precompute variant hashes (3.4 item 1). Done 2026-09-05, PR #1.
 4. Deterministic sheet order (10.1 A; subsumes the cascade-layers item in section 4).

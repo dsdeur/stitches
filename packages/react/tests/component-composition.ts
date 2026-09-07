@@ -1,7 +1,7 @@
 import { createStitches } from '../src/index.ts'
 import type { ReactElement } from 'react'
 
-function render(component: { render?: (props?: Record<string, unknown>, ref?: unknown) => ReactElement | null }, props?: Record<string, unknown>): ReactElement {
+function render(component: { render?: (props?: Record<string, unknown>, ref?: unknown) => ReactElement<Record<string, unknown>> | null }, props?: Record<string, unknown>): ReactElement<Record<string, unknown>> {
 	if (!component.render) throw new Error('render is undefined')
 	const result = component.render(props)
 	if (result === null) throw new Error('render returned null')
