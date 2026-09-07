@@ -49,33 +49,31 @@ const isSheetAccessible = (sheet: CSSStyleSheet): boolean => {
 /** Serializes the hydration marker for a group: its cache, plus the rule sort keys in the declared cascade. */
 const toMarker = (group: RuleGroup, cascade: Cascade): string => `--sxs{--sxs:${[...group.cache].join(' ')}${cascade === 'declared' && group.keys.length ? `;--sxsk:${group.keys.join(' ')}` : ''}}`
 
+/**
+ * Serializes the sheet from the css text that was applied to it, never by reading the CSSOM back.
+ * Browsers re-serialize rules they parsed: shorthands are expanded (so `padding:var(--x);padding-bottom:0`
+ * comes back as empty longhands) and declaration order can change. Keeping our own text makes client
+ * output equal to server output and immune to that.
+ */
 const getToString = (groupSheet: SheetGroup): (() => string) => {
 	return (): string => {
-		const { cssRules } = groupSheet.sheet
-		return Array.from({ length: cssRules.length }, (_, i) => cssRules[i])
-			.map((cssRule, cssRuleIndex) => {
-				const cssText = cssRule.cssText
+		let cssText = groupSheet.imports.join('')
 
-				let lastRuleCssText = ''
+		for (const name of groupSheet.names) {
+			const group = groupSheet.rules[name]
 
-				if (cssText.startsWith('--sxs')) return ''
+			if (!group) continue
 
-				const prevRule = cssRuleIndex > 0 ? cssRules[cssRuleIndex - 1] : undefined
-				if (prevRule && (lastRuleCssText = prevRule.cssText).startsWith('--sxs')) {
-					if (!cssRule.cssRules?.length) return ''
+			if (group.texts.length) {
+				cssText += `${toMarker(group, groupSheet.cascade)}@media{${group.texts.join('')}}`
+				continue
+			}
 
-					for (const name in groupSheet.rules) {
-						if (groupSheet.rules[name].group === cssRule) {
-							return `${toMarker(groupSheet.rules[name], groupSheet.cascade)}${cssText}`
-						}
-					}
+			// A hydrated group we could not decompose: emit what the sheet reports rather than drop it.
+			if (group.hydratedCssText) cssText += group.hydratedCssText
+		}
 
-					return cssRule.cssRules?.length ? `${lastRuleCssText}${cssText}` : ''
-				}
-
-				return cssText
-			})
-			.join('')
+		return cssText
 	}
 }
 
@@ -104,6 +102,7 @@ export const createSheet = (root: (DocumentOrShadowRoot & Node) | null, cascade:
 		sheet: null as never, // overwritten by reset() below before any external access
 		cascade,
 		names,
+		imports: [],
 		rules: {},
 		reset: null as never, // overwritten below
 		toString: null as never, // overwritten below
@@ -126,6 +125,8 @@ export const createSheet = (root: (DocumentOrShadowRoot & Node) | null, cascade:
 		for (const groupName in rules) {
 			delete rules[groupName]
 		}
+
+		groupSheet.imports.length = 0
 
 		const sheets: StyleSheetList | never[] = Object(root).styleSheets || []
 
@@ -160,8 +161,15 @@ export const createSheet = (root: (DocumentOrShadowRoot & Node) | null, cascade:
 				// A key per hydrated rule is required to position later rules; without them, later rules append.
 				const hydratedKeys = keys.length === groupRule.cssRules.length ? keys : Array.from({ length: groupRule.cssRules.length }, () => Number.NEGATIVE_INFINITY)
 
+				// Best effort: these rules were written by the server and parsed by the browser, so their
+				// text is whatever the browser serializes. Rules injected from here on use our own text.
+				const hydratedTexts = Array.from({ length: groupRule.cssRules.length }, (_, ruleIndex) => groupRule.cssRules[ruleIndex].cssText)
+				// Nothing readable inside, but the sheet still reports text for the group (a preloaded
+				// stylesheet that is not a real CSSOM). Keep it so getCssText() does not lose content.
+				const hydratedCssText = !hydratedTexts.length ? groupRule.cssText : undefined
+
 				groupSheet.sheet = existingSheet
-				groupSheet.rules[groupName] = { group: groupRule, index, cache: new Set(cache), keys: hydratedKeys, apply: noop }
+				groupSheet.rules[groupName] = { group: groupRule, index, cache: new Set(cache), keys: hydratedKeys, texts: hydratedTexts, hydratedCssText, apply: noop }
 				foundHydrated = true
 			}
 
@@ -215,7 +223,7 @@ export const createSheet = (root: (DocumentOrShadowRoot & Node) | null, cascade:
 				const index = currentRules[prevName] ? currentRules[prevName].index : currentSheet.cssRules.length
 				currentSheet.insertRule('@media{}', index)
 				currentSheet.insertRule(`--sxs{--sxs:${i}}`, index)
-				currentRules[name] = { group: currentSheet.cssRules[index + 1] as unknown as GroupRule, index, cache: new Set([i]), keys: [], apply: noop }
+				currentRules[name] = { group: currentSheet.cssRules[index + 1] as unknown as GroupRule, index, cache: new Set([i]), keys: [], texts: [], apply: noop }
 			}
 			addApplyToGroup(currentRules[name], cascade)
 		}
@@ -243,8 +251,9 @@ const addApplyToGroup = (group: RuleGroup, cascade: Cascade): void => {
 			try {
 				groupingRule.insertRule(cssText, index)
 				++index
+				group.texts.push(cssText)
 			} catch {
-				// do nothing and continue
+				// unsupported css: the rule is not in the sheet, so it is not in the text either
 			}
 		}
 
@@ -268,8 +277,9 @@ const addApplyToGroup = (group: RuleGroup, cascade: Cascade): void => {
 		try {
 			groupingRule.insertRule(cssText, low)
 			keys.splice(low, 0, key)
+			group.texts.splice(low, 0, cssText)
 		} catch {
-			// do nothing and continue
+			// unsupported css: the rule is not in the sheet, so it is not in the text either
 		}
 	}
 }

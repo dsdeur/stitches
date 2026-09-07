@@ -82,6 +82,10 @@ export interface RuleGroup {
 	cache: Set<string | number>
 	/** Sort key of every rule in the group, in rule order. Used by the 'declared' cascade to insert at position; empty in 'legacy'. */
 	keys: number[]
+	/** The exact css text of every rule in the group, in rule order. getCssText() serializes from this instead of reading the CSSOM back. */
+	texts: string[]
+	/** Set only when hydrating a group whose child rules could not be read back; getCssText() then emits this verbatim. */
+	hydratedCssText?: string
 	apply: (cssText: string, key?: number) => void
 }
 
@@ -90,6 +94,8 @@ export interface SheetGroup {
 	cascade: Cascade
 	/** Group names in sheet order for the active cascade. */
 	names: readonly string[]
+	/** Texts of the `@import` rules written straight to the sheet, in insertion order. They precede every group. */
+	imports: string[]
 	rules: Record<string, RuleGroup>
 	reset: () => void
 	toString: () => string

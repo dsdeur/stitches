@@ -30,7 +30,11 @@ export const createGlobalCssFunction = (config: StitchesConfig, sheet: SheetGrou
 								for (let importValue of ([] as string[]).concat(style['@import'] as string | string[])) {
 									importValue = importValue.includes('"') || importValue.includes("'") || importValue.startsWith('url(') ? importValue : `"${importValue}"`
 
-									sheet.sheet.insertRule(`@import ${importValue};`, importIndex++)
+									const importText = `@import ${importValue};`
+
+									sheet.sheet.insertRule(importText, importIndex++)
+									// getCssText() serializes from the recorded text, and imports precede every group there
+									sheet.imports.push(importText)
 								}
 
 								delete style['@import']

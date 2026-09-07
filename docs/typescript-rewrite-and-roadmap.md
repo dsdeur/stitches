@@ -407,6 +407,8 @@ list; it now points here. Items marked done stay for context.
    `root`).
    Merged 2026-09-05: B = PR #3, C = PR #6, D = PR #5, E = PR #4, F = PR #7.
 7. Own text cache for `getCssText` (10.1 G); unblocks a Next app-router recipe.
+   Done 2026-09-05: `getCssText()` serializes the css it applied instead of reading the CSSOM
+   back, so client output equals server output and shorthand and `all:unset` rules survive.
 8. `out` variance annotations on the `CSS<...>` generics (10.2).
 9. Composite border tokens via multi-scale `themeMap` (6.1).
 10. Static extraction (5.1).
@@ -500,7 +502,7 @@ root can throw "Converting circular structure to JSON". Reproduced with a cyclic
 Fix: exclude `root` from the memo key (identity-compare it) rather than adopting the
 PR's safe-stringify. Shadow DOM support (#628, #1048) then becomes viable.
 
-**G. `getCssText()` on the client re-serializes the CSSOM** (#1094; 3, #1166). Browsers
+**G. `getCssText()` on the client re-serializes the CSSOM** (fixed 2026-09-05) (#1094; 3, #1166). Browsers
 expand shorthands and reorder declarations in `cssRule.cssText`, so client-side output can
 be invalid (`padding-top: ;`) or misordered (`all: unset`). Server output is fine. Fix:
 keep the injected `cssText` strings per bucket and serialize from that cache instead of
