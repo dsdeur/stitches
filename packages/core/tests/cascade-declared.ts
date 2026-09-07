@@ -122,7 +122,7 @@ describe("cascade: 'declared'", () => {
 	})
 
 	test('legacy markers are unchanged', () => {
-		const { css, getCssText } = createStitches()
+		const { css, getCssText } = createStitches({ cascade: 'legacy' })
 		css({ variants: { size: { lg: { fontSize: 16 } } } })({ size: 'lg' })
 
 		expect(getCssText().includes('--sxsk')).toBe(false)

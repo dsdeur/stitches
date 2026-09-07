@@ -1,17 +1,17 @@
 import type { StitchesConfig, SheetGroup, CSSObject, KeyframesFunction } from '../types.ts'
-import { createMemo } from '../utility/createMemo.ts'
+import { createSheetMemo } from '../utility/createSheetMemo.ts'
 import { define } from '../utility/define.ts'
 
 import { toCssRules } from '../convert/toCssRules.ts'
 import { toHash } from '../convert/toHash.ts'
 import { toTailDashed } from '../convert/toTailDashed.ts'
 
-const createKeyframesFunctionMap = createMemo()
+const keyframesFunctionMemo = createSheetMemo<KeyframesFunction>()
 
 /** Returns a function that applies a keyframes rule. */
 export const createKeyframesFunction = (config: StitchesConfig, sheet: SheetGroup): KeyframesFunction =>
-	createKeyframesFunctionMap(
-		config,
+	keyframesFunctionMemo(
+		sheet,
 		(): KeyframesFunction => (style: CSSObject) => {
 			const name = `${toTailDashed(config.prefix)}k-${toHash(style)}`
 

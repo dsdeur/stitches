@@ -16,7 +16,7 @@ import type {
 	RuleKind,
 } from '../types.ts'
 import { internal } from '../utility/internal.ts'
-import { createMemo } from '../utility/createMemo.ts'
+import { createSheetMemo } from '../utility/createSheetMemo.ts'
 import { define } from '../utility/define.ts'
 import { hasNames } from '../utility/hasNames.ts'
 import { hasOwn } from '../utility/hasOwn.ts'
@@ -26,7 +26,7 @@ import { toHash } from '../convert/toHash.ts'
 import { toTailDashed } from '../convert/toTailDashed.ts'
 import { createRulesInjectionDeferrer, getGroupName, maxDepth } from '../sheet.ts'
 
-const createCssFunctionMap = createMemo()
+const cssFunctionMemo = createSheetMemo<CssFunction>()
 
 
 const isCSSObject = (value: object): value is CSSObject => value.constructor === Object && !('$$typeof' in value)
@@ -36,7 +36,7 @@ const toClassSelector = (className: string): string => `.${className.replace(/[^
 
 /** Returns a function that applies component styles. */
 export const createCssFunction = (config: StitchesConfig, sheet: SheetGroup): CssFunction =>
-	createCssFunctionMap(config, (): CssFunction => {
+	cssFunctionMemo(sheet, (): CssFunction => {
 		/** Position of each media key in the config, for breakpoint ordering in the declared cascade. */
 		const mediaOrder = new Map(Object.keys(config.media).map((name, index) => [name, index]))
 

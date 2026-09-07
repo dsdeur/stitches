@@ -95,3 +95,42 @@ describe('Root defaults', () => {
 		expect(doc.createElementCalls).toBe(0)
 	})
 })
+
+describe('One sheet per instance', () => {
+	/** Same shape as the fake root above; the style element has no sheet, so the SSR mock is used. */
+	const createRoot = () => {
+		const root = { nodeType: 11, styleSheets: [], ownerDocument: { createElement: () => ({ setAttribute() {}, sheet: null }) }, appendChild: (element) => element }
+		root.host = { shadowRoot: root }
+		return root
+	}
+
+	test('instances with an equal config but different roots do not share their css function', () => {
+		const a = createStitches({ prefix: 'shared1', root: createRoot() })
+		const b = createStitches({ prefix: 'shared1', root: createRoot() })
+
+		a.css({ color: 'red' })()
+		b.css({ color: 'blue' })()
+
+		expect(a.getCssText().includes('color:red')).toBe(true)
+		expect(a.getCssText().includes('color:blue')).toBe(false)
+		expect(b.getCssText().includes('color:blue')).toBe(true)
+		expect(b.getCssText().includes('color:red')).toBe(false)
+	})
+
+	test('globalCss, keyframes and createTheme are bound to their own sheet too', () => {
+		const a = createStitches({ prefix: 'shared2', root: createRoot() })
+		const b = createStitches({ prefix: 'shared2', root: createRoot() })
+
+		a.globalCss({ body: { margin: 0 } })()
+		b.globalCss({ body: { padding: 0 } })()
+		String(a.keyframes({ from: { opacity: 0 } }))
+		String(b.createTheme({ colors: { red: 'tomato' } }))
+
+		expect(a.getCssText().includes('body{margin:0}')).toBe(true)
+		expect(a.getCssText().includes('body{padding:0}')).toBe(false)
+		expect(a.getCssText().includes('@keyframes')).toBe(true)
+		expect(b.getCssText().includes('@keyframes')).toBe(false)
+		expect(b.getCssText().includes('--shared2-colors-red:tomato')).toBe(true)
+		expect(a.getCssText().includes('--shared2-colors-red:tomato')).toBe(false)
+	})
+})

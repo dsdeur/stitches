@@ -1,17 +1,17 @@
 import type { StitchesConfig, SheetGroup, ThemeResult, ThemeDefinition, CreateThemeFunction } from '../types.ts'
 import { ThemeToken } from '../ThemeToken.ts'
-import { createMemo } from '../utility/createMemo.ts'
+import { createSheetMemo } from '../utility/createSheetMemo.ts'
 
 import { toHash } from '../convert/toHash.ts'
 import { toTailDashed } from '../convert/toTailDashed.ts'
 import { toTokenizedValue } from '../convert/toTokenizedValue.ts'
 
-const createCreateThemeFunctionMap = createMemo()
+const createThemeFunctionMemo = createSheetMemo<CreateThemeFunction>()
 
 /** Returns a function that applies a theme and returns tokens of that theme. */
 export const createCreateThemeFunction = (config: StitchesConfig, sheet: SheetGroup) =>
-	createCreateThemeFunctionMap(
-		config,
+	createThemeFunctionMemo(
+		sheet,
 		(): CreateThemeFunction =>
 			((className: string | ThemeDefinition, style?: ThemeDefinition): ThemeResult => {
 				// theme is the first argument if it is an object, otherwise the second argument as an object

@@ -1,16 +1,16 @@
 import type { StitchesConfig, SheetGroup, CSSObject, GlobalCssFunction } from '../types.ts'
-import { createMemo } from '../utility/createMemo.ts'
+import { createSheetMemo } from '../utility/createSheetMemo.ts'
 import { define } from '../utility/define.ts'
 
 import { toCssRules } from '../convert/toCssRules.ts'
 import { toHash } from '../convert/toHash.ts'
 
-const createGlobalCssFunctionMap = createMemo()
+const globalCssFunctionMemo = createSheetMemo<GlobalCssFunction>()
 
 /** Returns a function that applies global styles. */
 export const createGlobalCssFunction = (config: StitchesConfig, sheet: SheetGroup): GlobalCssFunction =>
-	createGlobalCssFunctionMap(
-		config,
+	globalCssFunctionMemo(
+		sheet,
 		(): GlobalCssFunction =>
 			(...styles: CSSObject[]) => {
 				const render = () => {

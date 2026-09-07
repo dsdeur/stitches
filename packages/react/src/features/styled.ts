@@ -2,11 +2,17 @@ import React from 'react'
 
 import type { StitchesConfig, SheetGroup, ComponentInternals, ComponentConfig, CssFunction, CssInvocation, CssArg } from '../../../core/src/types.ts'
 import { internal } from '../../../core/src/utility/internal.ts'
-import { createMemo } from '../../../core/src/utility/createMemo.ts'
+import { createSheetMemo } from '../../../core/src/utility/createSheetMemo.ts'
 
 import { createCssFunction } from '../../../core/src/features/css.ts'
 
-const createCssFunctionMap = createMemo()
+/** The styled function bound to one sheet. Mirrors ReactStyledFunction in ../createStitches.ts. */
+type SheetStyledFunction = {
+	(...args: CssArg[]): StyledComponent
+	withConfig: (config?: ComponentConfig) => (...args: CssArg[]) => StyledComponent
+}
+
+const styledFunctionMemo = createSheetMemo<SheetStyledFunction>()
 
 export type StyledComponent = React.ForwardRefExoticComponent<Record<string, unknown>> & {
 	className: string
@@ -18,7 +24,7 @@ export type StyledComponent = React.ForwardRefExoticComponent<Record<string, unk
 
 /** Returns a function that applies component styles. */
 export const createStyledFunction = ({ config, sheet }: { config: StitchesConfig; sheet: SheetGroup }) =>
-	createCssFunctionMap(config, () => {
+	styledFunctionMemo(sheet, () => {
 		const cssFunction = createCssFunction(config, sheet)
 
 		const _styled = (args: CssArg[], css: CssFunction | CssInvocation = cssFunction, { displayName, shouldForwardStitchesProp }: ComponentConfig = {}) => {
