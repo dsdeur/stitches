@@ -43,5 +43,6 @@ Referenced from `../typescript-rewrite-and-roadmap.md`. Run from the repo root w
 - `type-perf/`: a consumer with `strict: false`, 40 deeply composed components, custom scales,
   utils and `VariantProps`, for upstream #1038 (type-checking without `strict` reportedly taking
   minutes). Run `npx tsc -p docs/bench/type-perf/tsconfig.json` and time it, with
-  `"strict": false` and `true`. Measured 2026-09-05 on TypeScript 6: 0.92s versus 0.83s, so the
+  `"strict": false` and `true`. Measured 2026-09-05 on TypeScript 6, three warm runs each:
+  2.2 to 3.0s without `strict`, 2.3 to 2.9s with it, so the two are indistinguishable and the
   reported blowup does not reproduce. Re-run this before acting on a slow-typecheck report.
