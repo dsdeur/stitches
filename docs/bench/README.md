@@ -46,3 +46,23 @@ Referenced from `../typescript-rewrite-and-roadmap.md`. Run from the repo root w
   `"strict": false` and `true`. Measured 2026-09-05 on TypeScript 6, three warm runs each:
   2.2 to 3.0s without `strict`, 2.3 to 2.9s with it, so the two are indistinguishable and the
   reported blowup does not reproduce. Re-run this before acting on a slow-typecheck report.
+
+## Consumer module resolution (run before publishing)
+
+The public types resolve differently per consumer `moduleResolution`, and only a real consumer
+proves it. There is nothing to check in, because it needs a `node_modules` layout, so recreate it:
+
+```bash
+mkdir -p /tmp/resolve/node_modules/@stitches && cd /tmp/resolve
+ln -s "$PWD"/../../Users/durge/dev/stitches/packages/react node_modules/@stitches/react   # adjust the path
+ln -s "$PWD"/../../Users/durge/dev/stitches/packages/core node_modules/@stitches/core
+# write an app.ts that imports createStitches, styled, css and the CSS type from '@stitches/react',
+# then type-check it once per mode with the repo's compiler:
+../stitches/node_modules/.bin/tsc --noEmit --strict --declaration --jsx react \
+  --module NodeNext --moduleResolution NodeNext app.ts
+```
+
+Measured 2026-09-05: `bundler` 0 errors, `nodenext` 0 errors (3 before the missing `.js`
+extension in `packages/react/types/stitches.d.ts` was added), legacy `node` 0 errors apart from
+TypeScript 6 deprecating the option itself. `packages/core/tests/public-types-imports.js` guards
+the extension rule so it cannot regress silently.

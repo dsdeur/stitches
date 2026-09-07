@@ -390,9 +390,12 @@ list; it now points here. Items marked done stay for context.
 
 1. Ship the TS branch under our scope: decide the `root` semantics, version, publish.
    Node and CI preparation done 2026-09-05. `root` decided and fixed (PR #10).
-   publint flags one packaging gap to close before publishing: the single `types` condition
-   resolves as ESM for `require` consumers; needs a `types/index.d.cts` (or per-condition
-   types) so CJS consumers get types too. Publishing goes to GitHub Packages (section 9).
+   publint flags one packaging gap: the single `types` condition resolves as ESM for `require`
+   consumers. Checked with real consumer fixtures on 2026-09-05 (recipe in `docs/bench/README.md`):
+   `bundler`, `nodenext` and legacy `node` all report 0 errors, so a `types/index.d.cts` is not
+   needed and `@arethetypeswrong/cli` is not needed to decide. What those fixtures did find was a
+   missing `.js` extension in react's `stitches.d.ts`, which broke every `nodenext` consumer; fixed,
+   with a test guarding the rule. Publishing goes to GitHub Packages (section 9).
 2. Toolchain replacement (section 2b): Vitest, then tsdown, then eslint flat config +
    publint, then React 19 for tests. Vitest, tsdown, oxlint and publint done 2026-09-05; React 19 for tests remains. May run in parallel with 3 to 5; runtime PRs open at
    the same time rebase onto it.
