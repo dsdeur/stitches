@@ -27,7 +27,7 @@ export interface StitchesInit {
 	cascade?: Cascade
 	media?: Record<string, string>
 	theme?: ThemeDefinition
-	themeMap?: Record<string, string>
+	themeMap?: Record<string, string | readonly string[]>
 	utils?: Record<string, (value: CSSValue) => CSSObject>
 	root?: (DocumentOrShadowRoot & Node) | null
 }
@@ -41,7 +41,7 @@ export interface StitchesConfig {
 	cascade: Cascade
 	media: Record<string, string>
 	theme: ThemeDefinition
-	themeMap: Record<string, string>
+	themeMap: Record<string, string | readonly string[]>
 	utils: Record<string, (value: CSSValue) => CSSObject>
 }
 

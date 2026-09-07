@@ -12,7 +12,14 @@ type ValueByPropertyName<PropertyName> = PropertyName extends keyof CSSPropertie
 
 type TokenByPropertyName<PropertyName, Theme, ThemeMap> = PropertyName extends keyof ThemeMap ? TokenByScaleName<ThemeMap[PropertyName], Theme> : never
 
-type TokenByScaleName<ScaleName, Theme> = ScaleName extends keyof Theme ? Util.Prefixed<'$', keyof Theme[ScaleName]> : never
+type TokenByScaleName<ScaleName, Theme> = (
+	// a property may name several scales, e.g. `border: ['borders', 'colors']`
+	ScaleName extends readonly (infer Scale)[]
+		? TokenByScaleName<Scale, Theme>
+	: ScaleName extends keyof Theme
+		? Util.Prefixed<'$', keyof Theme[ScaleName]>
+	: never
+)
 
 /** Returns a Style interface, leveraging the given media and style map. */
 export type CSS<

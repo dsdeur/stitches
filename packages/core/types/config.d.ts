@@ -13,6 +13,7 @@ declare namespace ConfigType {
 
 	/** Theme interface. */
 	export type Theme<T = {}> = {
+		borders?: { [token in number | string]: boolean | number | string }
 		borderStyles?: { [token in number | string]: boolean | number | string }
 		borderWidths?: { [token in number | string]: boolean | number | string }
 		colors?: { [token in number | string]: boolean | number | string }
@@ -35,7 +36,7 @@ declare namespace ConfigType {
 
 	/** ThemeMap interface. */
 	export type ThemeMap<T = {}> = {
-		[Property in keyof T]: T[Property] extends string ? T[Property] : string
+		[Property in keyof T]: T[Property] extends string | readonly string[] ? T[Property] : string
 	}
 
 	/** Utility interface. */
@@ -116,21 +117,21 @@ export interface DefaultThemeMap {
 	backgroundColor: 'colors'
 	backgroundImage: 'colors'
 	borderImage: 'colors'
-	border: 'colors'
-	borderBlock: 'colors'
-	borderBlockEnd: 'colors'
-	borderBlockStart: 'colors'
-	borderBottom: 'colors'
+	border: ['borders', 'colors']
+	borderBlock: ['borders', 'colors']
+	borderBlockEnd: ['borders', 'colors']
+	borderBlockStart: ['borders', 'colors']
+	borderBottom: ['borders', 'colors']
 	borderBottomColor: 'colors'
 	borderColor: 'colors'
-	borderInline: 'colors'
-	borderInlineEnd: 'colors'
-	borderInlineStart: 'colors'
-	borderLeft: 'colors'
+	borderInline: ['borders', 'colors']
+	borderInlineEnd: ['borders', 'colors']
+	borderInlineStart: ['borders', 'colors']
+	borderLeft: ['borders', 'colors']
 	borderLeftColor: 'colors'
-	borderRight: 'colors'
+	borderRight: ['borders', 'colors']
 	borderRightColor: 'colors'
-	borderTop: 'colors'
+	borderTop: ['borders', 'colors']
 	borderTopColor: 'colors'
 	borderBlockColor: 'colors'
 	borderBlockStartColor: 'colors'
@@ -142,7 +143,7 @@ export interface DefaultThemeMap {
 	caretColor: 'colors'
 	color: 'colors'
 	columnRuleColor: 'colors'
-	outline: 'colors'
+	outline: ['borders', 'colors']
 	outlineColor: 'colors'
 	fill: 'colors'
 	stroke: 'colors'

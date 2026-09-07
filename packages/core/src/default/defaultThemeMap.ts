@@ -1,3 +1,4 @@
+const borders = 'borders'
 const borderStyles = 'borderStyles'
 const borderWidths = 'borderWidths'
 const colors = 'colors'
@@ -13,7 +14,7 @@ const space = 'space'
 const transitions = 'transitions'
 const zIndices = 'zIndices'
 
-export const defaultThemeMap: Record<string, string> = {
+export const defaultThemeMap: Record<string, string | readonly string[]> = {
 	gap: space,
 	gridGap: space,
 	columnGap: space,
@@ -87,33 +88,33 @@ export const defaultThemeMap: Record<string, string> = {
 	backgroundColor: colors,
 	backgroundImage: colors,
 	borderImage: colors,
-	border: colors,
-	borderBlock: colors,
-	borderBlockEnd: colors,
-	borderBlockStart: colors,
-	borderBottom: colors,
+	border: [borders, colors],
+	borderBlock: [borders, colors],
+	borderBlockEnd: [borders, colors],
+	borderBlockStart: [borders, colors],
+	borderBottom: [borders, colors],
 	borderBottomColor: colors,
 	borderColor: colors,
-	borderInline: colors,
-	borderInlineEnd: colors,
-	borderInlineStart: colors,
+	borderInline: [borders, colors],
+	borderInlineEnd: [borders, colors],
+	borderInlineStart: [borders, colors],
 	borderBlockColor: colors,
 	borderBlockStartColor: colors,
 	borderBlockEndColor: colors,
 	borderInlineColor: colors,
 	borderInlineStartColor: colors,
 	borderInlineEndColor: colors,
-	borderLeft: colors,
+	borderLeft: [borders, colors],
 	borderLeftColor: colors,
-	borderRight: colors,
+	borderRight: [borders, colors],
 	borderRightColor: colors,
-	borderTop: colors,
+	borderTop: [borders, colors],
 	borderTopColor: colors,
 	caretColor: colors,
 	color: colors,
 	columnRuleColor: colors,
 	fill: colors,
-	outline: colors,
+	outline: [borders, colors],
 	outlineColor: colors,
 	stroke: colors,
 	textDecorationColor: colors,

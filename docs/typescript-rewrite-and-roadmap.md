@@ -356,13 +356,14 @@ Gaps:
   `$gray` currently resolves to `--colors-gray` through the same mapping.
 - Type autocomplete for a `borders` scale on the `border` property.
 
-**Proposal: multi-scale lookup in `themeMap`.** Allow `border: ['borders', 'colors']`.
+**Done 2026-09-05: multi-scale lookup in `themeMap`.** Allow `border: ['borders', 'colors']`.
 Resolution: a bare `$token` resolves to the first listed scale that defines the token in
 `config.theme`; if none does, fall back to the first scale (current behavior). This keeps
-`1px solid $gray` working, makes `border: '$default'` work with the default map, and is a
-small change in `toTokenizedValue` (it needs the theme, which it does not receive today)
-plus types. Add `borders` to the default scales and map the border/outline shorthands to
-`['borders', 'colors']`.
+`1px solid $gray` working and makes `border: '$default'` work with the default map. Shipped as
+exactly that: `toTokenizedValue` takes the theme and picks the scale per token, `borders` is a
+known scale in the public `Theme` type, and the twelve border and outline shorthands map to
+`['borders', 'colors']`. Caveat: the scale is chosen against the default theme, so a scale that
+exists only in a `createTheme()` theme cannot influence the choice.
 
 ### 6.2 Composite style templates (token expanding to several declarations)
 
@@ -412,7 +413,7 @@ list; it now points here. Items marked done stay for context.
 8. ~~`out` variance annotations on the `CSS<...>` generics (10.2).~~ Dropped 2026-09-05: the
    slowness it was meant to fix does not reproduce on TypeScript 6 (see 10.2 and
    `docs/bench/type-perf/`).
-9. Composite border tokens via multi-scale `themeMap` (6.1).
+9. Composite border tokens via multi-scale `themeMap` (6.1). Done 2026-09-05.
 10. Static extraction (5.1).
 11. Utility sheet (5.2), after deciding A vs B vs both.
 12. Native adapter (5.3), after settling the shared vocabulary.

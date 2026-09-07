@@ -88,7 +88,7 @@ export const toCssRules = (style: CSSObject, selectors: string[], conditions: st
 								? data && !(camelName in unitlessProps) && !(name.charCodeAt(0) === 45)
 									? String(data) + (camelName in timeProps ? 'ms' : 'px')
 									: String(data)
-								: toTokenizedValue(toSizingValue(camelName, data == null ? '' : String(data)), config.prefix, config.themeMap[camelName])
+								: toTokenizedValue(toSizingValue(camelName, data == null ? '' : String(data)), config.prefix, config.themeMap[camelName], config.theme)
 
 						currentRule[0].push(`${isAtRuleLike ? `${name} ` : `${toHyphenCase(name)}:`}${resolved}`)
 					}
