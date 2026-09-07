@@ -409,7 +409,9 @@ list; it now points here. Items marked done stay for context.
 7. Own text cache for `getCssText` (10.1 G); unblocks a Next app-router recipe.
    Done 2026-09-05: `getCssText()` serializes the css it applied instead of reading the CSSOM
    back, so client output equals server output and shorthand and `all:unset` rules survive.
-8. `out` variance annotations on the `CSS<...>` generics (10.2).
+8. ~~`out` variance annotations on the `CSS<...>` generics (10.2).~~ Dropped 2026-09-05: the
+   slowness it was meant to fix does not reproduce on TypeScript 6 (see 10.2 and
+   `docs/bench/type-perf/`).
 9. Composite border tokens via multi-scale `themeMap` (6.1).
 10. Static extraction (5.1).
 11. Utility sheet (5.2), after deciding A vs B vs both.
@@ -518,7 +520,7 @@ quote-wrapped, which breaks the `url(...)` form.
 | Issue / PR | Engagement | Problem | Action |
 |---|---|---|---|
 | #1055, #1160, #833 | 38, 11, 20 | "inferred type cannot be named without a reference to `@stitches/react/types/...`" when a package re-exports `styled` with `declaration: true` or `moduleResolution: bundler` | Put `types` first in `exports` (conditions are matched in order) and export `./types/*`; PRs #1150 and #1115 point at the same thing. Our `exports` currently lists `types` last. Beyond that, the fix is exporting named, stable types for `CSS`, `VariantProps`, and the config so consumers can annotate. |
-| #1038 | 20 | Type-checking without `strict` takes minutes | Add `out` variance annotations on the `CSS<...>` generics in `css-util.d.ts` (suggested in-thread, TS 4.7+). Cheap; verify with the reporter's repro. |
+| #1038 | 20 | Type-checking without `strict` takes minutes | **Not reproducible 2026-09-05.** `docs/bench/type-perf/` (40 deeply composed components, `strict: false`) type-checks in 0.92s versus 0.83s with `strict: true` on TypeScript 6. The report was against TS 4.6/4.7 in 2022. No change made; the `out` variance annotations suggested in the thread would be a speculative fix. Re-measure with the fixture if a consumer reports slowness. |
 | #1132 | 0 | Numeric-string variant keys widen `VariantProps` to `number` | Types fix in `styled-component.d.ts`. |
 | #1092, #1021, #749, #848 | low | Misc typing gaps (unknown properties accepted, `Token` not assignable, `as` + variants on composed components) | Backlog; revisit once we decide whether public types stay hand-written (section 9). |
 

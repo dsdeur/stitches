@@ -40,3 +40,8 @@ Referenced from `../typescript-rewrite-and-roadmap.md`. Run from the repo root w
   (roadmap section 11.5). Feed it `getCssText()` output of the same render in each mode plus the
   rendered HTML; it resolves the winning declaration per element, viewport, selector suffix and
   property in both sheets and prints every difference. Exit code 1 when anything differs.
+- `type-perf/`: a consumer with `strict: false`, 40 deeply composed components, custom scales,
+  utils and `VariantProps`, for upstream #1038 (type-checking without `strict` reportedly taking
+  minutes). Run `npx tsc -p docs/bench/type-perf/tsconfig.json` and time it, with
+  `"strict": false` and `true`. Measured 2026-09-05 on TypeScript 6: 0.92s versus 0.83s, so the
+  reported blowup does not reproduce. Re-run this before acting on a slow-typecheck report.
