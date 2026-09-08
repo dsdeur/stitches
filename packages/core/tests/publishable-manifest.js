@@ -1,17 +1,10 @@
 // Plain JS on purpose: exercises the packing script, which is plain JS in .task.
-import { existsSync, mkdtempSync, readdirSync } from 'fs'
-import { tmpdir } from 'os'
-import { join } from 'path'
-import { pack, toPublishableExports } from '../../../.task/pack.js'
+// Whether every export target exists in the staged output is publint's job (yarn lint:pkg, after
+// yarn build); this test needs no build and covers the rewrite itself.
+import { readFileSync } from 'fs'
+import { toPublishableExports } from '../../../.task/pack.js'
 
-const root = new URL('../../../', import.meta.url).pathname
-
-/** Every string target in an exports map. */
-const targets = (field, out = []) => {
-	if (typeof field === 'string') out.push(field)
-	else if (field && typeof field === 'object') for (const key of Object.keys(field)) targets(field[key], out)
-	return out
-}
+const manifestOf = (name) => JSON.parse(readFileSync(new URL(`../../${name}/package.json`, import.meta.url), 'utf8'))
 
 describe('Publishable manifest', () => {
 	test('a source entry is rewritten to its built file, everything else is left alone', () => {
@@ -21,22 +14,20 @@ describe('Publishable manifest', () => {
 	})
 
 	for (const name of ['core', 'react', 'stringify']) {
-		test(`@stitches/${name}: the staged package has no source exports and every export target exists`, () => {
-			const staged = join(mkdtempSync(join(tmpdir(), `stitches-test-${name}-`)), name)
-			const manifest = pack(join(root, 'packages', name), staged)
+		test(`@stitches/${name}: the published exports point at built files only`, () => {
+			const published = toPublishableExports(manifestOf(name).exports)
 
-			expect(JSON.stringify(manifest.exports).includes('./src/')).toBe(false)
-			expect(manifest.exports['.'].import).toBe('./dist/index.mjs')
-
-			for (const target of targets(manifest.exports)) {
-				if (target.includes('*')) {
-					// a pattern like ./types/*.d.ts: the directory must hold at least one matching file
-					const [directory, suffix] = [target.slice(2, target.indexOf('*')), target.slice(target.indexOf('*') + 1)]
-					expect(readdirSync(join(staged, directory)).some((file) => file.endsWith(suffix))).toBe(true)
-				} else {
-					expect(existsSync(join(staged, target))).toBe(true)
-				}
-			}
+			expect(JSON.stringify(published).includes('./src/')).toBe(false)
+			expect(published['.'].types).toBe('./types/index.d.ts')
+			expect(published['.'].import).toBe('./dist/index.mjs')
+			expect(published['.'].require).toBe('./dist/index.cjs')
 		})
 	}
+
+	test('the react checkout manifest is the only one that points an export at source', () => {
+		// documented in AGENTS.md: a submodule checkout is consumable without a build
+		expect(manifestOf('react').exports['.'].import).toBe('./src/index.ts')
+		expect(manifestOf('core').exports['.'].import).toBe('./dist/index.mjs')
+		expect(manifestOf('stringify').exports['.'].import).toBe('./dist/index.mjs')
+	})
 })
