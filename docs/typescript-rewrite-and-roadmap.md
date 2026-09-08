@@ -395,7 +395,11 @@ list; it now points here. Items marked done stay for context.
    `bundler`, `nodenext` and legacy `node` all report 0 errors, so a `types/index.d.cts` is not
    needed and `@arethetypeswrong/cli` is not needed to decide. What those fixtures did find was a
    missing `.js` extension in react's `stitches.d.ts`, which broke every `nodenext` consumer; fixed,
-   with a test guarding the rule. Publishing goes to GitHub Packages (section 9).
+   with a test guarding the rule.
+   PR #23 (2026-09-08) points react's `import` export at `./src/index.ts` so hudoman-mono can consume
+   a submodule checkout without a build. That cannot be published (react's src reaches core by
+   relative path), so `.task/pack.js` stages the publishable manifest with exports rewritten to
+   `dist`; `yarn lint:pkg` lints the staged form and the release workflow must publish from it. Publishing goes to GitHub Packages (section 9).
 2. Toolchain replacement (section 2b): Vitest, then tsdown, then eslint flat config +
    publint, then React 19 for tests. Vitest, tsdown, oxlint, publint and React 19 done 2026-09-05; moving the react tests off the deprecated react-test-renderer remains. May run in parallel with 3 to 5; runtime PRs open at
    the same time rebase onto it.

@@ -35,6 +35,11 @@ All four must pass before a PR is opened. CI runs typecheck, test, build, and li
   `createStitches` -> `features/css.ts` -> `convert/toCssRules.ts` -> `sheet.ts`.
 - `packages/react/src` the `styled` wrapper. Imports core via relative paths; the build
   bundles core into the react dist.
+- `packages/react/package.json` points `exports["."].import` at `./src/index.ts` on purpose, so a
+  git checkout (hudoman-mono vendors this repo as a submodule) is consumable without a build.
+  That manifest is never published: `.task/pack.js` stages the publishable form with exports
+  rewritten to `dist`, `yarn lint:pkg` lints that staged form, and the release workflow publishes
+  it. Do not point published exports at `src`; react's source reaches core by relative path.
 - `packages/*/types/*.d.ts` the PUBLIC types. Hand-written, and what consumers see. Do not
   break them. `packages/core/src/types.ts` is internal-only and deliberately loose.
 - `packages/*/tests` tests. Type-only tests are `*.type-test.ts` and are checked by

@@ -16,13 +16,14 @@
     "build": "tsdown",
     "build:watch": "tsdown --watch",
     "lint": "oxlint && yarn lint:pkg",
-    "lint:pkg": "publint --pack npm packages/core && publint --pack npm packages/react && publint --pack npm packages/stringify",
+    "lint:pkg": "node .task/lint-pkg.js",
     "release": "node .task/release.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc -p tsconfig.json",
     "test:declared": "node .task/test-declared.js",
-    "test:browser": "tsx docs/bench/browser-check.mts"
+    "test:browser": "tsx docs/bench/browser-check.mts",
+    "pack": "node .task/pack.js"
   },
   "workspaces": [
     "packages/core",
