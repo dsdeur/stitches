@@ -406,8 +406,8 @@ list; it now points here. Items marked done stay for context.
 3. Precompute variant hashes (3.4 item 1). Done 2026-09-05, PR #1.
 4. Deterministic sheet order (10.1 A; subsumes the cascade-layers item in section 4).
    Implemented 2026-09-05 behind `cascade: 'declared'` (PR #12); default stays 'legacy'.
-   Docs page written 2026-09-09 (`docs/cascade.md`); the default flip remains 2.0 work,
-   pending the real-app audit.
+   Docs page written 2026-09-09 (`docs/cascade.md`). First real-app audit run 2026-09-09,
+   below; the default flip remains 2.0 work.
 5. Own fixes for the packaging and theme-map gaps (10.2 row 1, 10.1 H): `exports.types`
    order, `./types/*` export, `accentColor` and logical border colors. One PR, with tests.
    Merged 2026-09-05: PR #2.
@@ -688,6 +688,40 @@ rest are the ones that were already flaky across navigation.
    declared order (two unrelated components merged via `className`). The upstream docs never
    stated the order; that is why people reach for `!important`. Its examples were verified
    against the implementation, not written from the design notes.
+
+### 11.5b First real-app audit (2026-09-09)
+
+Target: the hudoman framework, through its workbench app (22 specimens, compositions and
+behaviours, plus the shell), which is the whole component library and the family's single
+`createStitches` call. Captured with `docs/bench/cascade-capture.mts` once per mode from a
+dev server, light and dark, every entry visited in one page load, and interactive surfaces
+poked open so portalled content gets styled.
+
+Result: **no differences.** 85 class rules in each sheet, the same selector set in both, and
+no change to the winning declaration for any of the 74 distinct class lists in the markup,
+at any viewport or selector suffix.
+
+The result is not vacuous, which is worth stating because a mistake here fails silently:
+
+- The order really does move. 112 positions differ between the two sheets' ordered rule
+  lists, matching the app's own finding that a component's base rule now sits after a
+  composed component's variant rules.
+- The audit does detect differences on this input. Appending one rule to the declared sheet
+  produced exactly the four expected element-and-property reports.
+- An earlier run of this audit was vacuous and looked clean: the sheet was read after a
+  full navigation per route, so it held only the last route's rules. Both the capture script
+  and `docs/cascade.md` now warn about this, and the capture prints its rule count.
+
+Two gaps, neither closed by this run:
+
+- **Responsive values are not exercised.** The workbench renders no width-based media rules,
+  so the breakpoint-ordering rule is untested here. The family's only responsive usage is
+  `hudoman-editor`'s `css({ padding, '@max720': { padding } })`, a media override inside one
+  declaration; checked directly in both modes, the override still lands after the base.
+- **The notes app's own compositions are not covered.** `hnotes-tauri` has 62 `styled(...)`
+  call sites over the framework, exactly the depth-2 case the mode changes, but it needs the
+  Tauri runtime to render (`window.__TAURI__.invoke`) and renders nothing in a plain browser.
+  Covering it needs the audit run from inside the real app window.
 
 ### 11.6 Tests
 

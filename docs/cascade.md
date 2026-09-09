@@ -109,17 +109,31 @@ are the ones that were flaky across navigation.
 ### Suggested order
 
 1. Turn on `cascade: 'declared'` in a preview environment.
-2. Audit the real output. `docs/bench/cascade-audit.mts` resolves the winning declaration
-   per element and property under both modes and prints only the differences:
+2. Audit the real output. Capture the app once per mode, then compare:
 
    ```bash
-   tsx docs/bench/cascade-audit.mts legacy.css declared.css page.html
+   tsx docs/bench/cascade-capture.mts legacy /tmp/audit http://localhost:5173 button box dialog
+   tsx docs/bench/cascade-capture.mts declared /tmp/audit http://localhost:5173 button box dialog
+   tsx docs/bench/cascade-audit.mts /tmp/audit/legacy.css /tmp/audit/declared.css /tmp/audit/declared.html
    ```
 
-   Pass `getCssText()` from the same render in each mode plus the rendered markup. It
-   accounts for viewports (every `min-width` and `max-width` in the sheets becomes a
-   candidate width), and exits non-zero when anything differs, so it can gate the switch in
-   CI. This turns "something might change" into a finite list per app.
+   The capture visits each route in a single page load, so the sheet accumulates the way it
+   does for a real user. Do not capture after a full page load per route: a reload discards
+   the sheet, leaving only the last route's rules, and the audit then compares almost
+   nothing. If you already have SSR output, `getCssText()` per mode plus the markup works
+   just as well.
+
+   The audit resolves the winning declaration per element, viewport, selector suffix and
+   property in both sheets and prints only the differences. Viewports are derived from every
+   `min-width` and `max-width` in the sheets, so two breakpoints really do compete. It exits
+   non-zero when anything differs, so it can gate the switch in CI. This turns "something
+   might change" into a finite list per app.
+
+   Two things to check before trusting a clean result: that the sheets contain about as many
+   class rules as the markup has stitches classes (otherwise the capture missed routes), and
+   that the two sheets differ in rule order at all (otherwise both captures ran in the same
+   mode). The capture prints its rule count for the first; `diff` the ordered selector lists
+   for the second.
 3. Fix what it lists. Most entries are a variant reorder or an `!important` removal.
 4. Run the visual regression suite, if there is one.
 5. Grep your styles for `!important`. Most were added for the first row of the table and

@@ -36,6 +36,14 @@ Referenced from `../typescript-rewrite-and-roadmap.md`. Run from the repo root w
   responsive, composed, and `css`-prop cases and prints class names plus `getCssText()`.
   Run it against `next` and against a PR branch (a worktree works) and `diff` the outputs;
   any runtime PR that claims "no class-name or CSS change" must produce identical files.
+- `cascade-capture.mts <label> <outDir> <baseUrl> [route ...]`: captures one mode's inputs for
+  the audit below from a running app. Writes `<label>.css` (the sheet as the browser holds it)
+  and `<label>.html` (the markup of every route). Run it once per mode, flipping the app's
+  `cascade` between runs. Routes are visited with pushState plus a popstate event so the app
+  never reloads: a real navigation throws the sheet away, so reading it after each `goto`
+  captures only the last route and the audit then compares almost nothing. Accumulating in one
+  page load is also the honest case, since that is what makes legacy order depend on the order
+  things were visited in. Measured against the hudoman workbench 2026-09-09.
 - `cascade-audit.mts legacy.css declared.css page.html`: migration aid for `cascade: 'declared'`
   (roadmap section 11.5). Feed it `getCssText()` output of the same render in each mode plus the
   rendered HTML; it resolves the winning declaration per element, viewport, selector suffix and
