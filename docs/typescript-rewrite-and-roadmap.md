@@ -406,7 +406,8 @@ list; it now points here. Items marked done stay for context.
 3. Precompute variant hashes (3.4 item 1). Done 2026-09-05, PR #1.
 4. Deterministic sheet order (10.1 A; subsumes the cascade-layers item in section 4).
    Implemented 2026-09-05 behind `cascade: 'declared'` (PR #12); default stays 'legacy'.
-   Default flip and the 'How the cascade works' docs page are 2.0 work.
+   Docs page written 2026-09-09 (`docs/cascade.md`); the default flip remains 2.0 work,
+   pending the real-app audit.
 5. Own fixes for the packaging and theme-map gaps (10.2 row 1, 10.1 H): `exports.types`
    order, `./types/*` export, `accentColor` and logical border colors. One PR, with tests.
    Merged 2026-09-05: PR #2.
@@ -682,9 +683,11 @@ rest are the ones that were already flaky across navigation.
 3. **`!important` inventory**: grep the codebase's stitches styles for `!important`. Most
    were added for the first row of the table above and can go once the mode is on. Leave
    them during migration; remove after the audit is clean.
-4. **Documentation**: a "How the cascade works" page with the five rules in 11.1 and the
-   table in 11.4. The current docs never state the order; that is why people reach for
-   `!important`.
+4. **Documentation**: written 2026-09-09, `docs/cascade.md`. It states the five rules from
+   11.1, the migration table from 11.4, the audit recipe above and the case that has no
+   declared order (two unrelated components merged via `className`). The upstream docs never
+   stated the order; that is why people reach for `!important`. Its examples were verified
+   against the implementation, not written from the design notes.
 
 ### 11.6 Tests
 

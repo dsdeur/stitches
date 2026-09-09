@@ -3,7 +3,9 @@
 This is a maintained fork of stitches (CSS-in-JS). It is consumed by several large
 production codebases, so API compatibility matters more than elegance. Read
 `docs/typescript-rewrite-and-roadmap.md` before starting any task; it is the source of
-truth for status, decisions, and the task queue (section 8).
+truth for status, decisions, and the task queue (section 8). `docs/cascade.md` is the
+user-facing reference for style ordering in both `cascade` modes; keep it in step with any
+change to ordering behavior.
 
 ## Branches and remotes
 
