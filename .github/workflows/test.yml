@@ -26,3 +26,9 @@ jobs:
         run: yarn build
       - name: Lint
         run: yarn lint
+      # The node tests use a mock sheet, so nothing else here exercises the live CSSOM:
+      # rule insertion positions, hydration, and what a browser actually resolves.
+      - name: Install Chromium
+        run: yarn playwright install --with-deps chromium
+      - name: Run the browser check
+        run: yarn test:browser
