@@ -23,4 +23,24 @@ const pkg = (name: 'stringify' | 'core' | 'react'): UserConfig => ({
 	outputOptions: (options, format) => (format === 'iife' ? { ...options, entryFileNames: 'index.global.js', globals: { react: 'React' } } : options),
 })
 
-export default defineConfig([pkg('stringify'), pkg('core'), pkg('react')])
+/**
+ * The native package is built on its own terms: no browser platform, no IIFE global and no React,
+ * because nothing in it touches the DOM or a renderer. Its types are generated from the source
+ * rather than hand-written like the web packages'; it is new, small, and has no richer public
+ * surface to express than what the code already says.
+ */
+const native: UserConfig = {
+	entry: { index: 'packages/native/src/index.ts' },
+	outDir: 'packages/native/dist',
+	format: ['esm', 'cjs'],
+	platform: 'neutral',
+	target: 'es2020',
+	minify: true,
+	sourcemap: true,
+	dts: true,
+	clean: true,
+	hash: false,
+	outExtensions: ({ format }) => ({ js: format === 'cjs' ? '.cjs' : '.mjs' }),
+}
+
+export default defineConfig([pkg('stringify'), pkg('core'), pkg('react'), native])

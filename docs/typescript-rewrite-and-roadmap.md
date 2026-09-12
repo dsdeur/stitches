@@ -319,6 +319,41 @@ on web), and let web-only components keep full CSS. Do not try to run CSS on nat
 Order of work: settle the shared vocabulary first; the native renderer is the largest
 item on this list.
 
+**Shipped 2026-09-12: the theme bridge, `packages/native`.** The first slice is not the
+renderer, it is the part with a consumer waiting. `hnotes-rn/ui/tokens.ts` is a hand-
+transcribed copy of the framework theme, with a TODO and a ticket (HUD-93) to single-source
+it. `toNativeTokens(theme, ...overrides)` produces plain values from a theme: lengths become
+numbers, everything else stays a string, and token references resolve.
+
+That last part is the reason this is a package and not three lines in an app. A token's
+runtime `value` is its CSS value, so a reference to another token arrives as
+`var(--scale-token)` and the browser is what resolves it. React Native has no such
+indirection, so the bridge resolves chains itself against the merged theme, stops at cycles,
+and leaves an unknown variable visible rather than guessing. `createTheme()` also returns
+only the tokens it overrides, hence the variadic merge: `toNativeTokens(theme, darkTheme)`.
+
+Checked against the real hudoman theme: it reproduces every number in the hand-written file
+(radii 4/6/8/16, fontSizes 11 to 20, space 4 to 32) and adds the tokens that file omits, with
+nothing left unresolved. 11 of the app's 17 colour names exist verbatim in the framework
+theme; the other six (`accent`, `accentSoft`, `textMuted`, `separator`, `cardShadow`,
+`cardIndicator`) are mobile-only names the app derives, so a small mapping layer stays in the
+app. The bridge replaces the values, not the naming.
+
+**Separation is the constraint, not a preference.** The package has no dependencies, no
+React Native code and no runtime import of its own, so nothing can pull it into a web bundle
+and nothing it carries can reach a native one. A test asserts both directions from the
+source, and it was confirmed to fail when an import is added. If a `styled` for React Native
+lands later, it belongs in this package with `react-native` as a peer; the web packages must
+still never import it.
+
+Its types are generated from source rather than hand-written in `types/`, unlike the web
+packages. Those exist because core's public types are much richer than its internal ones;
+this package has no such gap, and generating also gives it separate `import` and `require`
+type conditions, which is the packaging warning the older packages still carry.
+
+Next, in order: a codegen script so an app can commit a generated tokens file instead of
+calling the bridge at runtime; then the shared vocabulary; then the renderer.
+
 ## 6. Themes and composite tokens
 
 ### 6.1 Composite border token

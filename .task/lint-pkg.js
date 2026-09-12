@@ -9,7 +9,7 @@ import { pack } from './pack.js'
 const root = new URL('../', import.meta.url).pathname
 let failed = false
 
-for (const name of ['core', 'react', 'stringify']) {
+for (const name of ['core', 'react', 'native', 'stringify']) {
 	const staged = join(mkdtempSync(join(tmpdir(), `stitches-publish-${name}-`)), name)
 
 	pack(join(root, 'packages', name), staged)
