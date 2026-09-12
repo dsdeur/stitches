@@ -1,44 +1,74 @@
 # @stitches/native
 
-Share a stitches theme with React Native, or with anything else that cannot read CSS.
+Stitches for React Native, and for anything else that has no CSS.
 
-This package holds **no React Native code and no dependencies**. It is plain JavaScript that
-turns a theme into plain values, so nothing here can reach a web bundle and nothing in the web
-packages reaches here.
+It takes **the same config object** the web takes — same theme, same tokens, same variants — and
+resolves everything to plain values, because native has no custom properties to defer to.
 
 ```ts
-import { createStitches } from '@stitches/react'
-import { toNativeTokens } from '@stitches/native'
+import { createStitches } from '@stitches/native'
+import { View } from 'react-native'
 
-const { theme, createTheme } = createStitches({
-  theme: { space: { 1: '4px' }, colors: { background: 'white' } },
+const { css, theme, createTheme } = createStitches({
+  theme: {
+    colors: { background: 'white', text: '#0c0c11' },
+    space: { 1: '4px', 2: '8px' },
+    radii: { default: '6px' },
+  },
 })
 
-const darkTheme = createTheme({ colors: { background: 'black' } })
+const card = css({
+  padding: '$1',
+  backgroundColor: '$background',
+  borderRadius: '$default',
+  variants: {
+    size: { large: { padding: '$2' } },
+    raised: { true: { shadowOpacity: 0.1 } },
+  },
+  defaultVariants: { size: 'large' },
+})
 
-const light = toNativeTokens(theme)              // { space: { 1: 4 }, colors: { background: 'white' } }
-const dark = toNativeTokens(theme, darkTheme)    // { space: { 1: 4 }, colors: { background: 'black' } }
+<View style={card({ raised: true })} />
+// { padding: 8, backgroundColor: 'white', borderRadius: 6, shadowOpacity: 0.1 }
 ```
 
-Pass the base theme first and the override second. `createTheme()` returns **only** the tokens it
-overrides, so a theme made that way is missing most of the set on its own.
+`css()` returns a style object, so it goes straight into a `style` prop. Nothing renders here and
+nothing is injected anywhere.
 
-## What happens to a value
+## What carries over from the web
 
-| Theme value | Result | Why |
-|---|---|---|
-| `'4px'` | `4` | React Native takes lengths as numbers |
-| `'1.6'` | `1.6` | unitless values are numbers too |
-| `'white'`, `'#fff'`, `'50%'` | unchanged | not a length |
-| `'0 1px 2px $colors$shadow'` | `'0 1px 2px rgba(0,0,0,.2)'` | the reference is resolved |
-| a reference to a token the theme does not define | left as `var(--…)`, never a number | guessing would be worse than being visible |
+- **Tokens.** `'$1'` resolves against the scale the property maps to; `'$colors$text'` names a
+  scale outright. References inside the theme resolve too, so `box: '0 1px 2px $colors$shadow'`
+  arrives as a finished value.
+- **Units.** `'4px'` becomes `4`, `'50%'` stays a string, and what React Native takes as an object
+  or array (`shadowOffset`, `transform`) passes through untouched.
+- **Variants**, compound variants and default variants, with the same prop shape and the same
+  boolean shorthand (`{ raised: { true: … } }` takes `raised={true}`).
+- **Composition.** `css(base, { … })` extends, keeping the base's variants, and the extension wins.
+- **Themes.** `createTheme()` resolves over the default one; pass the result as the second argument
+  to any style function.
 
-A token's runtime value is its CSS value, so references to other tokens arrive here already
-written as `var(--scale-token)` — in a browser the engine resolves those. This resolves them
-against the same theme instead, following chains, and stops at a cycle rather than looping.
+## Order is the order you wrote
 
-## What this is not
+Depth first, then base before variants before compound variants, then declaration order, and the
+`css` prop last of everything — the same rules as `cascade: 'declared'` on the web, which
+[docs/cascade.md](../../docs/cascade.md) sets out in full. On native this falls out of merging
+objects in that order, so there is no sheet and no specificity to reason about.
 
-It does not style anything. There is no `styled` for React Native here, and no opinion about how
-you build components. It gives you the same numbers and colours the web uses, so a native UI
-stops being a hand-transcribed copy of the theme that drifts.
+## What it does not do, yet
+
+- **No `styled()`.** That needs React; this package has no dependencies at all today. It is the
+  next piece.
+- **No responsive values.** `@media` has no counterpart until breakpoints read the window, which is
+  a hook, which is part of the same piece as `styled()`.
+- **No `utils`.** A web config's utils expand into CSS properties React Native does not have, so
+  running them here would produce styles RN silently drops. Native utils are their own decision.
+- **Style property names are not checked.** Values and variants are typed; the property surface is
+  still structural. Naming every RN property, the way the web packages hand-write their CSS types,
+  is its own piece of work.
+
+## Bridging a theme you only have as an object
+
+If you have a web theme object rather than the config that made it, `toNativeTokens(theme, …overrides)`
+flattens it the same way. It resolves the `var(--scale-token)` references a live theme carries,
+since on the web the browser is what resolves those.

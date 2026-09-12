@@ -1,3 +1,5 @@
+import { toNativeValue } from './values.ts'
+
 /**
  * Turns a stitches theme into plain values a non-CSS renderer can use.
  *
@@ -53,19 +55,6 @@ const toVariable = (token: ThemeTokenLike): string => `--${token.prefix ? `${tok
 
 /** `var(--name)` or `var(--name, fallback)`. A nested var() inside a fallback is left alone. */
 const variableReference = /var\(\s*(--[\w-]+)\s*(?:,([^()]*))?\)/g
-
-const pixels = /^-?(?:\d+(?:\.\d+)?|\.\d+)px$/
-const bareNumber = /^-?(?:\d+(?:\.\d+)?|\.\d+)$/
-
-/** React Native wants numbers for lengths; everything else stays the string it was. */
-const toNativeValue = (value: string): NativeValue => {
-	const trimmed = value.trim()
-
-	if (bareNumber.test(trimmed)) return Number(trimmed)
-	if (pixels.test(trimmed)) return Number(trimmed.slice(0, -2))
-
-	return value
-}
 
 /**
  * Replaces every `var()` with the value of the token it names, repeatedly, since a token's value

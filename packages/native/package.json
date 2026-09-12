@@ -1,7 +1,7 @@
 {
   "name": "@stitches/native",
   "version": "1.3.1-1",
-  "description": "Share a stitches theme with React Native and anything else that is not CSS",
+  "description": "Stitches for React Native: the same config, resolved to plain values",
   "type": "module",
   "main": "dist/index.cjs",
   "module": "dist/index.mjs",
@@ -32,10 +32,13 @@
     "access": "public"
   },
   "keywords": [
+    "css-in-js",
     "design tokens",
     "react native",
     "stitches",
+    "styled",
     "theme",
-    "tokens"
+    "tokens",
+    "variants"
   ]
 }

@@ -319,40 +319,48 @@ on web), and let web-only components keep full CSS. Do not try to run CSS on nat
 Order of work: settle the shared vocabulary first; the native renderer is the largest
 item on this list.
 
-**Shipped 2026-09-12: the theme bridge, `packages/native`.** The first slice is not the
-renderer, it is the part with a consumer waiting. `hnotes-rn/ui/tokens.ts` is a hand-
-transcribed copy of the framework theme, with a TODO and a ticket (HUD-93) to single-source
-it. `toNativeTokens(theme, ...overrides)` produces plain values from a theme: lengths become
-numbers, everything else stays a string, and token references resolve.
+**Shipped 2026-09-12: `packages/native`.** The package takes the same config object the web
+takes and resolves it to plain values, because native has no custom properties to defer to.
+`createStitches(config)` returns `css`, `theme` and `createTheme`; `css()` returns a React
+Native style object, so it goes straight into a `style` prop.
 
-That last part is the reason this is a package and not three lines in an app. A token's
-runtime `value` is its CSS value, so a reference to another token arrives as
-`var(--scale-token)` and the browser is what resolves it. React Native has no such
-indirection, so the bridge resolves chains itself against the merged theme, stops at cycles,
-and leaves an unknown variable visible rather than guessing. `createTheme()` also returns
-only the tokens it overrides, hence the variadic merge: `toNativeTokens(theme, darkTheme)`.
+What carries over, with tests for each: tokens (`'$1'` against the property's scale, `'$colors$text'`
+naming one outright, and references inside the theme itself), units (`'4px'` to `4`, `'50%'` left
+alone, `shadowOffset` and `transform` passed through), variants including compound and default
+variants and the boolean shorthand, composition where the extension wins and keeps the base's
+variants, and themes via `createTheme`. Order follows section 11.1 — depth, then base before
+variants before compound, then declaration order, `css` prop last — which on native falls out of
+merging objects in that order. Variant props are typed, including a typo in a variant value and a
+variant that does not exist; the composed function keeps both sets.
 
-Checked against the real hudoman theme: it reproduces every number in the hand-written file
-(radii 4/6/8/16, fontSizes 11 to 20, space 4 to 32) and adds the tokens that file omits, with
-nothing left unresolved. 11 of the app's 17 colour names exist verbatim in the framework
-theme; the other six (`accent`, `accentSoft`, `textMuted`, `separator`, `cardShadow`,
-`cardIndicator`) are mobile-only names the app derives, so a small mapping layer stays in the
-app. The bridge replaces the values, not the naming.
+`toNativeTokens(theme, ...overrides)` stays as the bridge for when you hold a web theme object
+rather than the config that made it: a live theme's values carry `var(--scale-token)` references,
+since the browser is what resolves those on the web, so it resolves them itself, follows chains,
+stops at cycles, and leaves an unknown variable visible rather than guessing.
 
-**Separation is the constraint, not a preference.** The package has no dependencies, no
-React Native code and no runtime import of its own, so nothing can pull it into a web bundle
-and nothing it carries can reach a native one. A test asserts both directions from the
-source, and it was confirmed to fail when an import is added. If a `styled` for React Native
-lands later, it belongs in this package with `react-native` as a peer; the web packages must
-still never import it.
+**Separation is a constraint on the design, not a preference.** No dependencies, no React Native
+code, no runtime import of its own, and no web package may import it, so nothing can pull this
+into a web bundle. `packages/native/tests/separation.js` asserts all of that from the source, and
+it was confirmed to fail when an import is added to core. Its tsdown entry is separate too:
+neutral platform, no IIFE global, no React external.
 
-Its types are generated from source rather than hand-written in `types/`, unlike the web
-packages. Those exist because core's public types are much richer than its internal ones;
-this package has no such gap, and generating also gives it separate `import` and `require`
-type conditions, which is the packaging warning the older packages still carry.
+Its types are generated from source rather than hand-written in `types/`, unlike the web packages.
+Those exist because core's public types are much richer than its internal ones; this package has no
+such gap, and generating also gives it separate `import` and `require` type conditions, which is
+the packaging warning the older packages still carry.
 
-Next, in order: a codegen script so an app can commit a generated tokens file instead of
-calling the bridge at runtime; then the shared vocabulary; then the renderer.
+**Deliberately not in it yet**, each for a stated reason rather than by omission:
+
+- `styled()`. It needs React, and the package has no dependencies today. Next piece, and it brings
+  `react` as a peer.
+- Responsive values. Breakpoints on native mean reading the window, which is a hook, so this lands
+  with `styled()`.
+- `utils`. A web config's utils expand into CSS properties RN does not have, so running them would
+  produce styles RN silently drops. Native utils are their own decision.
+- Style property names. Values and variants are typed; the property surface is still structural.
+  Naming every RN property the way the web packages hand-write their CSS types is its own piece of
+  work, and the alternative — a type-only dependency on `react-native` — is a packaging decision
+  worth making deliberately.
 
 ## 6. Themes and composite tokens
 
