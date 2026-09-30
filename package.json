@@ -29,6 +29,7 @@
     "packages/core",
     "packages/react",
     "packages/native",
+    "packages/static",
     "packages/test",
     "packages/stringify"
   ],
