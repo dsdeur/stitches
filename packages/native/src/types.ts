@@ -32,24 +32,41 @@ export interface ComposerDefinition extends StyleObject {
 type VariantValue<Values> = [keyof Values & ('true' | 'false')] extends [never] ? keyof Values & (string | number) : boolean | (Exclude<keyof Values, 'true' | 'false'> & (string | number))
 
 /**
+ * A variant prop, plain or per breakpoint: `size="large"` or `size={{ '@initial': 'small', '@bp2': 'large' }}`,
+ * with the breakpoint names of the config, and raw `@media (…)` queries as the web allows.
+ */
+export type ResponsiveValue<Value, Media extends string> = Value | ({ readonly [Key in '@initial' | `@${Media}`]?: Value } & { readonly [query: `@media ${string}`]: Value | undefined })
+
+/** The props a style function accepts, without the `css` override. */
+type StyleFunctionProps<Function> = Function extends { (props?: infer Props, ...rest: never[]): NativeStyle } ? Omit<NonNullable<Props>, 'css'> : never
+
+/**
  * The props a definition's variants accept.
  *
- * The first branch is what lets `css(base, { … })` keep the base's variants: what `css()` returned
- * is a function, and its own props are the variants it already carries.
+ * The first two branches are what let `css(base, { … })` and `styled(Base, { … })` keep the base's
+ * variants: what `css()` returned is a function whose props are the variants it already carries,
+ * and a styled component carries that function as `style`.
  */
-export type VariantSelection<Definition> = Definition extends { (props?: infer Props, ...rest: never[]): NativeStyle }
+export type VariantSelection<Definition, Media extends string> = Definition extends { (props?: infer Props, ...rest: never[]): NativeStyle }
 	? Omit<NonNullable<Props>, 'css'>
-	: Definition extends { readonly variants: infer Variants }
-		? { readonly [Variant in keyof Variants]?: VariantValue<Variants[Variant]> }
-		: object
+	: Definition extends { readonly style: infer Function }
+		? StyleFunctionProps<Function>
+		: Definition extends { readonly variants: infer Variants }
+			? { readonly [Variant in keyof Variants]?: ResponsiveValue<VariantValue<Variants[Variant]>, Media> }
+			: object
 
 type UnionToIntersection<Union> = (Union extends unknown ? (of: Union) => void : never) extends (of: infer Intersection) => void ? Intersection : never
 
 /** Every composer in a `css(a, b)` call contributes its variants. */
-export type VariantsOf<Arguments extends readonly unknown[]> = UnionToIntersection<VariantSelection<Arguments[number]>>
+export type VariantsOf<Arguments extends readonly unknown[], Media extends string> = UnionToIntersection<VariantSelection<Arguments[number], Media>>
 
 export interface NativeConfig {
 	readonly theme?: ThemeDefinition
+	/**
+	 * The web config's breakpoints, read against the window size: `min-`/`max-` width and height,
+	 * range syntax, `orientation`, `and` and commas. See media.ts for what never matches.
+	 */
+	readonly media?: { readonly [name: string]: string }
 	/** Which scale a bare `$token` resolves against, per property. Merged over the default map. */
 	readonly themeMap?: { readonly [property: string]: string }
 }

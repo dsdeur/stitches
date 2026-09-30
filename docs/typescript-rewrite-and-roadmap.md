@@ -351,16 +351,31 @@ the packaging warning the older packages still carry.
 
 **Deliberately not in it yet**, each for a stated reason rather than by omission:
 
-- `styled()`. It needs React, and the package has no dependencies today. Next piece, and it brings
-  `react` as a peer.
-- Responsive values. Breakpoints on native mean reading the window, which is a hook, so this lands
-  with `styled()`.
+- ~~`styled()`~~ and ~~responsive values~~: shipped 2026-09-30, below.
 - `utils`. A web config's utils expand into CSS properties RN does not have, so running them would
   produce styles RN silently drops. Native utils are their own decision.
 - Style property names. Values and variants are typed; the property surface is still structural.
   Naming every RN property the way the web packages hand-write their CSS types is its own piece of
   work, and the alternative — a type-only dependency on `react-native` — is a packaging decision
   worth making deliberately.
+
+**Shipped 2026-09-30: `styled()` and responsive values.** A second entry, `@stitches/native/react`,
+returns what the main one does plus `styled`, `Provider` and `useTheme`; `react` is an optional
+peer, and the main entry still imports nothing (the separation test now checks that only
+`src/react/` imports React, and that the main entry never reaches it). The window size comes in
+through `Provider viewport={useWindowDimensions()}`, so the package still has no `react-native`
+code.
+
+`media` is read with a small parser for what a window size can answer: `min-`/`max-` width and
+height, range syntax, `orientation`, `and`, commas; anything else never matches. Responsive variant
+props keep the web's semantics rather than picking one winner: every active value applies, `@initial`
+first and then in `config.media` order (rule 4 of 11.1), so a property only the `@initial` value
+sets survives a breakpoint that leaves it alone, and a compound applies while each of its values
+is active. Style objects are cached per breakpoint signature, so identity holds while the window
+stays within one set of breakpoints.
+
+Still open, as listed above: native `utils`, RN property names in the types, and `withConfig`
+(`shouldForwardStitchesProp`) for variants that share a name with a component prop.
 
 ## 6. Themes and composite tokens
 
@@ -467,7 +482,9 @@ list; it now points here. Items marked done stay for context.
 9. Composite border tokens via multi-scale `themeMap` (6.1). Done 2026-09-05.
 10. Static extraction (5.1).
 11. Utility sheet (5.2), after deciding A vs B vs both.
-12. Native adapter (5.3), after settling the shared vocabulary.
+12. Native adapter (5.3), after settling the shared vocabulary. `@stitches/native` shipped 2026-09-12
+    (css, themes, tokens); `styled()`, `Provider` and responsive values 2026-09-30. Open: native
+    `utils`, RN property names in the types, `withConfig`.
 
 ## 9. Open questions
 
