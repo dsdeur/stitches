@@ -144,6 +144,43 @@ for (const cascade of ['legacy', 'declared'] as const) {
 }
 
 /**
+ * Served from another origin, the same file cannot be hydrated: the browser does not let a script
+ * read a cross-origin stylesheet's rules. The runtime must notice, write its own sheet, and still
+ * style the element correctly. The static README states this; this is what backs it.
+ */
+{
+	const stitches = createStitches({ cascade: 'declared', media: staticMedia, root: null })
+	const extracted = extractCss(stitches, [stitches.css(staticStyle)])
+
+	const page = await browser.newPage()
+	await page.route('http://stitches.test/**', (route) =>
+		new URL(route.request().url()).pathname === '/stitches.js'
+			? route.fulfill({ contentType: 'text/javascript', body: readFileSync(globalBuild, 'utf8') })
+			: route.fulfill({ contentType: 'text/html', body: '<!doctype html><html><head><link rel="stylesheet" href="http://cdn.test/stitches.css"><script src="/stitches.js"></script></head><body></body></html>' }),
+	)
+	await page.route('http://cdn.test/**', (route) => route.fulfill({ contentType: 'text/css', body: extracted }))
+	await page.goto('http://stitches.test/')
+
+	const actual = await page.evaluate(`(() => {
+		const { css } = stitches.createStitches({ cascade: 'declared', media: ${JSON.stringify(staticMedia)} })
+		const element = document.createElement('div')
+		element.className = css(${JSON.stringify(staticStyle)})({ tone: { '@wide': 'brand' } }).className
+		document.body.appendChild(element)
+		return JSON.stringify({ sheets: document.styleSheets.length, color: getComputedStyle(element).color })
+	})()`)
+	const expected = JSON.stringify({ sheets: 2, color: 'rgb(6, 6, 6)' })
+	await page.close()
+
+	checked++
+	if (actual === expected) {
+		console.log('  ok   a cross-origin extracted file is not hydrated, and the page still styles correctly')
+	} else {
+		failures.push(`a cross-origin extracted file\n    expected ${expected}\n    actual   ${JSON.stringify(actual)}`)
+		console.log('  FAIL a cross-origin extracted file is not hydrated, and the page still styles correctly')
+	}
+}
+
+/**
  * The plain bundle on its own: one <style>, no script. Component classes, a variant, a utility
  * overriding a component style, a breakpoint utility and a theme switch must all resolve, since a
  * single exported html page has nothing else to style it.

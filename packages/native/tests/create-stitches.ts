@@ -162,6 +162,12 @@ describe('createStitches for React Native', () => {
 			expect(css({ boxShadow: '$box' })({}, dark)).toEqual({ boxShadow: '0 1px 2px rgba(255,255,255,.4)' })
 		})
 
+		test('a cycle or an unknown reference in the theme is left as written, not guessed', () => {
+			const { theme } = createStitches({ theme: { colors: { a: '$b', b: '$a', c: '$missing', d: '$space$1' }, space: { 1: '4px' } } })
+
+			expect(theme.colors).toEqual({ a: '$a', b: '$b', c: '$missing', d: 4 })
+		})
+
 		test('the default theme is exposed as plain values', () => {
 			const { theme } = createStitches(config)
 

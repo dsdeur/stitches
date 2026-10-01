@@ -63,6 +63,15 @@ describe('responsive values', () => {
 		expect(css({ 'opacity': 1, '@media (orientation: landscape)': { opacity: 0.5 } })({}, undefined, desktop)).toEqual({ opacity: 0.5 })
 	})
 
+	test('a raw query in a prop matches nothing without a viewport, and the same query twice reads the same', () => {
+		const props = { tone: { '@media (min-width: 1000px)': 'brand' } } as const
+
+		expect(box(props).color).toBe(undefined)
+		expect(box(props, undefined, desktop).color).toBe('blue')
+		expect(box(props, undefined, desktop).color).toBe('blue')
+		expect(box(props, undefined, phone).color).toBe(undefined)
+	})
+
 	test('alternating between window sizes gives the right style each time', () => {
 		for (const viewport of [phone, desktop, phone, tablet, desktop, tablet]) {
 			const expected = viewport === phone ? 4 : viewport === tablet ? 8 : 16

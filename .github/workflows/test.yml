@@ -18,8 +18,9 @@ jobs:
         run: yarn install --frozen-lockfile
       - name: Typecheck
         run: yarn typecheck
-      - name: Run tests
-        run: yarn test
+      # Same suite as `yarn test`, with a coverage summary in the log (reported, not gated).
+      - name: Run tests with coverage
+        run: yarn test:coverage
       - name: Run tests with the declared cascade forced on
         run: yarn test:declared
       - name: Build
