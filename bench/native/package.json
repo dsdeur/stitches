@@ -14,6 +14,7 @@
     "react-native": "0.81.5"
   },
   "devDependencies": {
-    "@stitches/native-babel": "file:./.stitches/native-babel"
+    "@stitches/native-babel": "file:./.stitches/native-babel",
+    "babel-preset-expo": "~54.0.12"
   }
 }
