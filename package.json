@@ -21,7 +21,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc -p tsconfig.json",
     "test:declared": "node .task/test-declared.js",
-    "test:browser": "tsx docs/bench/browser-check.mts",
+    "test:browser": "tsx docs/bench/browser-check.mts && tsx docs/bench/browser-differential.mts",
     "pack": "node .task/pack.js"
   },
   "workspaces": [
