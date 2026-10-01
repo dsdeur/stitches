@@ -517,6 +517,14 @@ list; it now points here. Items marked done stay for context.
    a submodule checkout without a build. That cannot be published (react's src reaches core by
    relative path), so `.task/pack.js` stages the publishable manifest with exports rewritten to
    `dist`; `yarn lint:pkg` lints the staged form and the release workflow must publish from it. Publishing goes to GitHub Packages (section 9).
+   Release workflow added 2026-10-01 (`.github/workflows/release.yml`, `.task/publish.js`): pushing a
+   `v<version>` tag runs the full CI check set, refuses unless the tag equals every public package's
+   version, then publishes each staged package as `@dsdeur/stitches-<name>` with `publishConfig.registry`
+   pinned to GitHub Packages; a prerelease version goes out under the `next` dist-tag. Consumers add
+   `@dsdeur:registry=https://npm.pkg.github.com` and a read token to `.npmrc`, and alias
+   `"@stitches/react": "npm:@dsdeur/stitches-react@<version>"`. The interactive npmjs `yarn release`
+   (`.task/release.js`) is removed: we do not publish to npm. Still open: choosing the first version
+   (packages are at `1.3.1-1`) and pushing the tag.
 2. Toolchain replacement (section 2b): Vitest, then tsdown, then eslint flat config +
    publint, then React 19 for tests. Vitest, tsdown, oxlint, publint and React 19 done 2026-09-05. The react package's tests moved off the deprecated react-test-renderer on 2026-10-01: they render through react-dom in jsdom (pinned to 27.4.0: the current 30.x pulls in a dependency that requires Node 22.22.2 or newer), via `packages/react/tests/helpers/render.ts`. Stitches keeps its mock sheet there (`root: null`), because jsdom's CSS parser rejects the `--sxs{…}` marker real browsers accept; `yarn test:browser` covers the real document. react-test-renderer stays a dev dependency only for `@stitches/native`'s component tests, whose React Native host elements carry style objects and arrays that react-dom would turn into DOM attributes. May run in parallel with 3 to 5; runtime PRs open at
    the same time rebase onto it.

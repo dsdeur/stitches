@@ -22,6 +22,26 @@ export const toPublishableExports = (field) => {
 	return field
 }
 
+/** Where and under which scope the fork publishes (roadmap section 9): GitHub Packages, `@dsdeur`. */
+export const registry = 'https://npm.pkg.github.com'
+export const scope = '@dsdeur'
+
+/**
+ * The published manifest: exports pointed at built files, and the fork's own name and registry.
+ * `@stitches/core` becomes `@dsdeur/stitches-core`, because GitHub Packages only accepts packages
+ * scoped to the repository owner. Consumers alias the old name to it, so imports do not change.
+ * `publishConfig.registry` pins the registry in the manifest itself, so a stray `npm publish`
+ * cannot send it to npmjs under a name we do not own.
+ */
+export const toPublishableManifest = (manifest) => ({
+	...manifest,
+	name: manifest.name.replace(/^@stitches\//, `${scope}/stitches-`),
+	// GitHub Packages links a package to its repository through this field.
+	repository: { type: 'git', url: 'git+https://github.com/dsdeur/stitches.git' },
+	exports: toPublishableExports(manifest.exports),
+	publishConfig: { ...manifest.publishConfig, registry },
+})
+
 /** Copies the publishable files of `packageDir` into `outDir` and returns the manifest written there. */
 export const pack = (packageDir, outDir) => {
 	const manifest = JSON.parse(readFileSync(join(packageDir, 'package.json'), 'utf8'))
@@ -36,7 +56,7 @@ export const pack = (packageDir, outDir) => {
 		if (existsSync(source)) cpSync(source, join(outDir, entry), { recursive: true })
 	}
 
-	const publishable = { ...manifest, exports: toPublishableExports(manifest.exports) }
+	const publishable = toPublishableManifest(manifest)
 	writeFileSync(join(outDir, 'package.json'), `${JSON.stringify(publishable, null, 2)}\n`)
 
 	return publishable
