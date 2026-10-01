@@ -32,6 +32,8 @@ const cases = {
 	'props split only (for-in copy)': (props) => splitProps(props),
 	'lookup + createElement (what useStyle code does)': (props) => createElement(View, { testID: props.testID, style: cardStyle(props) }),
 	'styledElement(Card, …) (compiled; styled does this plus a component)': (props) => styledElement(Card, props, undefined, noEnvironment),
+	'createElement with two children': (props) => createElement(View, { testID: props.testID, style: sheet.card }, 'a', 'b'),
+	'styledElement(Card, …) with two children, as the app calls it': (props) => styledElement(Card, props, undefined, noEnvironment, 'a', 'b'),
 }
 
 let sink
