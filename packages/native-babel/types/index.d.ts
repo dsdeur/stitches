@@ -3,7 +3,7 @@
  * styled component costs no component of its own at runtime. Opt in from babel.config.js:
  *
  * ```js
- * plugins: [['@stitches/native-babel', { sources: ['@my/ui', /\/components\//] }]]
+ * plugins: [['module:@stitches/native-babel', { sources: ['@my/ui', /\/components\//] }]]
  * ```
  */
 export interface StitchesNativeBabelOptions {

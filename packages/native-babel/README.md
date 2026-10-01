@@ -10,9 +10,13 @@ React Native and Expo still build every file with Babel (through Metro), so this
 ```js
 module.exports = {
   presets: ['babel-preset-expo'], // or '@react-native/babel-preset'
-  plugins: [['@stitches/native-babel', { sources: ['@my/ui', /\/components\//] }]],
+  plugins: [['module:@stitches/native-babel', { sources: ['@my/ui', /\/components\//] }]],
 }
 ```
+
+The `module:` prefix matters: Babel rewrites a scoped plugin name `@scope/name` to
+`@scope/babel-plugin-name` before resolving it, and `module:` asks it to use the name as written.
+(If you alias the package, `module:` + the alias.)
 
 Nothing changes until you add it, and removing it changes nothing either: the components are the
 same, only how they are rendered is.
