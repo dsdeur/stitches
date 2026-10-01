@@ -25,6 +25,7 @@ import { toCssRules } from '../convert/toCssRules.ts'
 import { toHash } from '../convert/toHash.ts'
 import { toTailDashed } from '../convert/toTailDashed.ts'
 import { createRulesInjectionDeferrer, getGroupName, maxDepth } from '../sheet.ts'
+import { mergeAtoms, toAtoms, type Atom } from './atomic.ts'
 
 const cssFunctionMemo = createSheetMemo<CssFunction>()
 
@@ -39,6 +40,9 @@ export const createCssFunction = (config: StitchesConfig, sheet: SheetGroup): Cs
 	cssFunctionMemo(sheet, (): CssFunction => {
 		/** Position of each media key in the config, for breakpoint ordering in the declared cascade. */
 		const mediaOrder = new Map(Object.keys(config.media).map((name, index) => [name, index]))
+
+		/** Atomic output: the atoms of each style object, by the class name the style would get otherwise, which is unique to its content. */
+		const atomsByStyle = new Map<string, Atom[]>()
 
 		const _css = (args: CssArg[], componentConfig: ComponentConfig = {}): CssComponentFunction => {
 			const internals: ComponentInternals = {
@@ -76,7 +80,7 @@ export const createCssFunction = (config: StitchesConfig, sheet: SheetGroup): Cs
 			const type = internals.type ?? 'span'
 			if (!internals.composers.size) internals.composers.add(['PJLV', {}, [], [], {}, []])
 
-			return createRenderer(config, { type, composers: internals.composers }, sheet, componentConfig, mediaOrder)
+			return createRenderer(config, { type, composers: internals.composers }, sheet, componentConfig, mediaOrder, atomsByStyle)
 		}
 
 		const css: CssFunction = Object.assign((...args: CssArg[]) => _css(args), {
@@ -164,7 +168,10 @@ interface CssProps {
 
 type ResolvedInternals = { type: ComponentType; composers: Set<ComposerTuple> }
 
-const createRenderer = (config: StitchesConfig, internals: ResolvedInternals, sheet: SheetGroup, { shouldForwardStitchesProp }: ComponentConfig, mediaOrder: Map<string, number>): CssComponentFunction => {
+/** Atomic output: a style object that applies, and its place in the declared order (depth, kind, sort key). */
+type AtomicPiece = [depth: number, kind: number, key: number, cacheKey: string, style: CSSObject]
+
+const createRenderer = (config: StitchesConfig, internals: ResolvedInternals, sheet: SheetGroup, { shouldForwardStitchesProp }: ComponentConfig, mediaOrder: Map<string, number>, atomsByStyle: Map<string, Atom[]>): CssComponentFunction => {
 	const [baseClassName, baseClassNames, prefilledVariants, undefinedVariants] = getPreparedDataFromComposers(internals.composers)
 
 	const hasReactType = typeof internals.type === 'function' || (typeof internals.type === 'object' && !!internals.type.$$typeof)
@@ -212,7 +219,37 @@ const createRenderer = (config: StitchesConfig, internals: ResolvedInternals, sh
 		})
 	}
 
+	/** Atomic output: injects one declaration's rule into its group, once. */
+	const injectAtom = (atom: Atom): void => {
+		const groupName = `atomic${atom.bucket}`
+		const { cache } = sheet.rules[groupName]
+
+		if (cache.has(atom.className)) return
+
+		cache.add(atom.className)
+		injectionTarget[groupName].apply(atom.cssText, atom.key)
+	}
+
+	const atomsOf = (cacheKey: string, style: CSSObject): Atom[] => {
+		let atoms = atomsByStyle.get(cacheKey)
+
+		if (!atoms) atomsByStyle.set(cacheKey, (atoms = toAtoms(style, config)))
+
+		return atoms
+	}
+
+	/**
+	 * Atomic output: the merged atoms for each combination of style objects, keyed by their cache keys
+	 * in the order render finds them, which is the same for the same props. A warm render then skips
+	 * sorting and merging.
+	 */
+	const mergedBySelection = new Map<string, readonly Atom[]>()
+
+	let renderedOnce = false
+
 	const render = (props?: CssProps): RenderResult => {
+		renderedOnce = true
+
 		props = (typeof props === 'object' && props) || empty
 
 		const forwardProps: CssProps = { ...props }
@@ -242,12 +279,16 @@ const createRenderer = (config: StitchesConfig, internals: ResolvedInternals, sh
 
 		const classSet = new Set([...baseClassNames])
 
+		/** Atomic output: what applies, collected in place of injecting, then merged in the declared order below. */
+		const pieces: AtomicPiece[] | null = config.atomic ? [] : null
+
 		// Composers are visited base-first, so the position in the set is the composition depth.
 		let depth = baseDepth
 		let composerIndex = 0
 
 		for (const [composerBaseClass, composerBaseStyle, singularVariants, compoundVariants] of internals.composers) {
-			inject('styled', depth, composerBaseClass, composerBaseStyle, 0)
+			if (pieces) pieces.push([depth, 0, 0, composerBaseClass, composerBaseStyle])
+			else inject('styled', depth, composerBaseClass, composerBaseStyle, 0)
 
 			const singularVariantsToAdd = getTargetVariantsToAdd(singularVariants, composerHomes[composerIndex], depth, variantProps, config.media, mediaOrder)
 			const compoundVariantsToAdd = getTargetVariantsToAdd(compoundVariants, null, depth, variantProps, config.media, mediaOrder, true)
@@ -257,6 +298,11 @@ const createRenderer = (config: StitchesConfig, internals: ResolvedInternals, sh
 
 				for (const [vClass, vStyle, isResponsive, vHash, sortKey, groupDepth] of variantToAdd) {
 					const variantClassName = `${composerBaseClass}-${vHash}-${vClass}`
+
+					if (pieces) {
+						pieces.push([groupDepth, 1, sortKey, variantClassName, vStyle])
+						continue
+					}
 
 					classSet.add(variantClassName)
 
@@ -269,6 +315,11 @@ const createRenderer = (config: StitchesConfig, internals: ResolvedInternals, sh
 
 				for (const [vClass, vStyle, , vHash, sortKey, groupDepth] of variantToAdd) {
 					const variantClassName = `${composerBaseClass}-${vHash}-${vClass}`
+
+					if (pieces) {
+						pieces.push([groupDepth, 2, sortKey, variantClassName, vStyle])
+						continue
+					}
 
 					classSet.add(variantClassName)
 
@@ -286,9 +337,33 @@ const createRenderer = (config: StitchesConfig, internals: ResolvedInternals, sh
 			if (!shouldForwardStitchesProp?.('css')) delete forwardProps.css
 			const iClass = `${baseClassName}-i${toHash(cssStyles)}-css`
 
-			classSet.add(iClass)
+			if (pieces) pieces.push([Number.POSITIVE_INFINITY, 3, 0, iClass, cssStyles])
+			else {
+				classSet.add(iClass)
 
-			inject('inline', 0, iClass, cssStyles, 0)
+				inject('inline', 0, iClass, cssStyles, 0)
+			}
+		}
+
+		if (pieces) {
+			const selection = pieces.map((piece) => piece[3]).join(' ')
+			let atoms = mergedBySelection.get(selection)
+
+			if (!atoms) {
+				// Array.prototype.sort is stable, so pieces with equal positions keep the order they were found in.
+				pieces.sort(([depthA, kindA, keyA], [depthB, kindB, keyB]) => depthA - depthB || kindA - kindB || keyA - keyB)
+
+				const merged = new Map<string, Atom>()
+
+				for (const [, , , cacheKey, style] of pieces) mergeAtoms(merged, atomsOf(cacheKey, style))
+
+				mergedBySelection.set(selection, (atoms = [...merged.values()]))
+			}
+
+			for (const atom of atoms) {
+				injectAtom(atom)
+				classSet.add(atom.className)
+			}
 		}
 
 		for (const propClassName of String(props.className || '')
@@ -311,7 +386,8 @@ const createRenderer = (config: StitchesConfig, internals: ResolvedInternals, sh
 	}
 
 	const toString = () => {
-		if (!sheet.rules[getGroupName(config.cascade, 'styled', baseDepth)].cache.has(baseClassName)) render()
+		// In atomic output the base class carries no rules of its own, so the question is only whether the component rendered.
+		if (config.atomic ? !renderedOnce : !sheet.rules[getGroupName(config.cascade, 'styled', baseDepth)].cache.has(baseClassName)) render()
 
 		return baseClassName
 	}

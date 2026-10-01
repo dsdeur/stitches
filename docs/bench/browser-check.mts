@@ -92,6 +92,60 @@ for (const cascade of ['legacy', 'declared'] as const) {
 	await check('getCssText() in the browser equals the server output', textCase, nodeText(cascade))
 }
 
+/**
+ * Atomic output resolves per element at render time; the browser must agree with what the merge
+ * decided, with every rule written in the order that would mislead a naive sheet.
+ */
+const atomicCase = `() => {
+	const { css } = stitches.createStitches({ atomic: true, media: { wide: '(min-width: 1px)' } })
+	const resolve = (className, property) => {
+		const element = document.createElement('div')
+		element.className = className
+		document.body.appendChild(element)
+		return getComputedStyle(element)[property]
+	}
+
+	// the parent renders first, so its variant's rule is written before the extension's
+	const parent = css({ color: 'rgb(0, 0, 0)', variants: { tone: { muted: { color: 'rgb(1, 1, 1)' } } }, defaultVariants: { tone: 'muted' } })
+	parent()
+	const child = css(parent, { color: 'rgb(2, 2, 2)' })
+
+	// the longhand is written before the shorthand
+	css({ paddingTop: 12 })()
+	const refined = css({ padding: 4, variants: { tall: { true: { paddingTop: 12 } } } })
+
+	const reset = css({ paddingTop: 8, variants: { flat: { true: { padding: 0 } } } })
+
+	// declared later and unconditional, but the breakpoint wins wherever it matches
+	const responsive = css({ '@wide': { color: 'rgb(3, 3, 3)' }, variants: { plain: { true: { color: 'rgb(4, 4, 4)' } } } })
+
+	return JSON.stringify({
+		extension: resolve(child().className, 'color'),
+		refinedTop: resolve(refined({ tall: true }).className, 'paddingTop'),
+		refinedLeft: resolve(refined({ tall: true }).className, 'paddingLeft'),
+		reset: resolve(reset({ flat: true }).className, 'paddingTop'),
+		breakpoint: resolve(responsive({ plain: true }).className, 'color'),
+	})
+}`
+
+{
+	const page = await browser.newPage()
+	await page.setContent('<!doctype html><html><body></body></html>')
+	await page.addScriptTag({ path: globalBuild })
+	const actual = await page.evaluate(`(${atomicCase})()`)
+	const expected = JSON.stringify({ extension: 'rgb(2, 2, 2)', refinedTop: '12px', refinedLeft: '4px', reset: '0px', breakpoint: 'rgb(3, 3, 3)' })
+	await page.close()
+
+	checked++
+	console.log('atomic output')
+	if (actual === expected) {
+		console.log('  ok   each element resolves to what the render-time merge decided')
+	} else {
+		failures.push(`atomic: each element resolves to what the render-time merge decided\n    expected ${expected}\n    actual   ${JSON.stringify(actual)}`)
+		console.log('  FAIL atomic: each element resolves to what the render-time merge decided')
+	}
+}
+
 await browser.close()
 
 if (failures.length) {

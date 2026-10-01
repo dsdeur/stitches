@@ -25,6 +25,8 @@ export type RuleKind = 'themed' | 'global' | 'styled' | 'onevar' | 'resonevar' |
 export interface StitchesInit {
 	prefix?: string
 	cascade?: Cascade
+	/** One class per declaration, merged per element at render time (see features/atomic.ts). Off by default. */
+	atomic?: boolean
 	media?: Record<string, string>
 	theme?: ThemeDefinition
 	themeMap?: Record<string, string | readonly string[]>
@@ -39,6 +41,7 @@ export interface StitchesInit {
 export interface StitchesConfig {
 	prefix: string
 	cascade: Cascade
+	atomic: boolean
 	media: Record<string, string>
 	theme: ThemeDefinition
 	themeMap: Record<string, string | readonly string[]>
@@ -89,9 +92,16 @@ export interface RuleGroup {
 	apply: (cssText: string, key?: number) => void
 }
 
+/** Which groups a sheet has, in order, and whether rules within a group are inserted by sort key rather than appended. */
+export interface SheetLayout {
+	readonly names: readonly string[]
+	readonly keyed: boolean
+}
+
 export interface SheetGroup {
 	sheet: SheetLike
-	cascade: Cascade
+	/** Rules within a group are inserted by sort key (declared cascade, atomic output) rather than appended. */
+	keyed: boolean
 	/** Group names in sheet order for the active cascade. */
 	names: readonly string[]
 	/** Texts of the `@import` rules written straight to the sheet, in insertion order. They precede every group. */

@@ -211,6 +211,8 @@ export type CreateStitches = {
 			prefix?: ConfigType.Prefix<Prefix>
 			/** How rules are ordered in the sheet. 'legacy' (default) is the 1.x behavior. 'declared' orders by composition depth, then rule kind, then declaration order, then breakpoint order, so later declarations overwrite earlier ones regardless of render order. */
 			cascade?: 'legacy' | 'declared'
+			/** One class per declaration, merged per element at render time, so a declaration shared by many components is one rule. Off by default. Resolves conflicts by the 'declared' rules whatever `cascade` says, except that a breakpoint style beats an unconditional one wherever it matches. See docs/cascade.md. */
+			atomic?: boolean
 			media?: ConfigType.Media<Media>
 			theme?: ConfigType.Theme<Theme>
 			themeMap?: ConfigType.ThemeMap<ThemeMap>

@@ -287,6 +287,20 @@ Two designs, both viable:
   stylex). Constraint: selector-based targeting (`Comp.selector`, `${Comp} &`, descendant
   selectors that assume one class per component) is unavailable in that mode.
 
+**Shipped 2026-10-01: B, `createStitches({ atomic: true })`.** One class per declaration, decided per
+element at render time: the style objects that apply are merged in the declared order and only the
+winning declaration of each (selector, conditions, property) slot keeps its class, so the sheet never
+has to choose between two classes on one element for the same thing. The sheet orders only what can
+still overlap: breakpoints after unconditional styles in `config.media` order, shorthands before
+longhands (a later shorthand drops the longhands it resets while merging), and pseudo-classes in a
+fixed order. `toCssRules` was split so atomic output reuses the whole conversion (`walkDeclarations`
+reports each declaration; `toCssRules` groups them into rules exactly as before, verified
+byte-identical with `classname-parity.mts`). The usage constraint turned out smaller than expected:
+components keep their own class on the element, without rules, so `${Button}` selectors still work;
+what stops working is a selector written against a variant class. One deliberate difference from
+`'declared'`: a breakpoint style beats an unconditional one wherever it matches, even when declared
+earlier. Documented in `docs/cascade.md`; checked in a real browser by `yarn test:browser`.
+
 Decision note (2026-09-05): the usage constraint in B is acceptable ("components must be
 used a certain way, same as `li` in `ul`"). So B is not ruled out. Open question: which
 one actually serves the agent use case. A is what an agent writing HTML consumes; B is
@@ -466,7 +480,8 @@ list; it now points here. Items marked done stay for context.
    `docs/bench/type-perf/`).
 9. Composite border tokens via multi-scale `themeMap` (6.1). Done 2026-09-05.
 10. Static extraction (5.1).
-11. Utility sheet (5.2), after deciding A vs B vs both.
+11. Utility sheet (5.2): both. B, atomic component output, shipped 2026-10-01 as
+    `createStitches({ atomic: true })` (see 5.2 and `docs/cascade.md`). A lands with `@stitches/static`.
 12. Native adapter (5.3), after settling the shared vocabulary.
 
 ## 9. Open questions

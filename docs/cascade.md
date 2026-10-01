@@ -145,3 +145,43 @@ are the ones that were flaky across navigation.
 Class names are identical in both modes. A style object used at depth 0 in one component
 and depth 1 in another produces the same class name; only which copy applies changes.
 Warm renders are unaffected; ordering costs one binary search per newly injected rule.
+
+## Atomic output
+
+```js
+createStitches({ atomic: true })
+```
+
+`atomic` is a separate option, off by default. With it, stitches writes one class per declaration
+instead of one per style object, so `color: red` is one rule however many components use it. The
+file stops growing with the number of components and grows with the number of distinct
+declarations instead.
+
+Which declaration an element gets is no longer decided by where rules sit in the sheet. When a
+component renders, the style objects that apply are merged in the order of rules 1 to 3 above
+(depth, then base before variants before compound variants, then declaration order, then the
+`css` prop last), and only the winning declaration of each property keeps its class. An element
+never carries two atomic classes that compete for the same property under the same selector and
+conditions, so the `cascade` option has no say over components in this mode: they resolve by the
+declared rules, whatever `cascade` is set to. Themes and globals are unchanged (rule 5).
+
+The sheet still orders what can overlap on one element:
+
+- **Breakpoints after unconditional styles**, then breakpoints in `config.media` order. This is the
+  one place atomic output differs from `'declared'`: a style under `@bp1` beats an unconditional one
+  wherever `@bp1` matches, even when the unconditional one was declared later. Rule 4 orders
+  breakpoints only within one variant; in atomic output every rule sharing a breakpoint shares a
+  position, so breakpoints rank after unconditional styles across the board.
+- **Shorthands before longhands.** A shorthand declared after a longhand removes it from the
+  element (`padding: 0` after `paddingTop: 8` leaves only `padding: 0`), so a longhand that is still
+  there was declared later and should win, and it sorts after. Two shorthands that only partly
+  overlap on one element (`borderTop` and `borderColor`) have no fixed order between them; avoid
+  mixing them on one element.
+- **Pseudo-classes in a fixed order:** `:link`, `:visited`, `:hover`, `:focus-within`, `:focus`,
+  `:focus-visible`, `:active`, `:disabled`. A hovered and pressed button shows its `:active` style.
+
+What changes for markup: an element's classes are its components' own classes (still on the
+element, without rules of their own, so `${Button}` selectors keep working) followed by `a-…`
+classes. Variant classes (`c-x-hash-size-large`) are no longer added, so a selector written against
+one stops matching. Server and client must agree on `atomic` and on `media`, since both decide which
+group a rule is in.
