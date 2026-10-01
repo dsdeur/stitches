@@ -15,9 +15,10 @@ import * as stylesheet from './stylesheet'
 import * as styled from './styled'
 import * as useStyle from './useStyle'
 import * as compiled from './compiled'
+import * as precompiled from './precompiled'
 import { runMicro } from './micro'
 
-const implementations = { none, stylesheet, styled, useStyle, compiled }
+const implementations = { none, stylesheet, styled, useStyle, compiled, precompiled }
 const runner = 'http://localhost:8799'
 const count = 400
 const rounds = 11

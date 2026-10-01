@@ -133,7 +133,7 @@ const runScenario = async (device, config) => {
 	return received
 }
 
-const scenarios = ['none', 'stylesheet', 'styled', 'useStyle', 'compiled']
+const scenarios = ['none', 'stylesheet', 'styled', 'useStyle', 'compiled', 'precompiled']
 const operations = ['mount', 'update', 'theme']
 
 const quantile = (values, q) => {

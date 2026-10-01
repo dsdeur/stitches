@@ -3,7 +3,7 @@
 import { Text, View } from 'react-native'
 import { createStitches } from '@stitches/native/react'
 
-export const { styled, css, Provider, createTheme, theme, useStyle } = createStitches({
+export const { styled, css, Provider, createTheme, theme, useStyle, useTheme } = createStitches({
 	theme: {
 		colors: { surface: '#ffffff', text: '#111111', muted: '#666666', accent: '#2255ff', border: '#dddddd' },
 		space: { 1: '4px', 2: '8px', 3: '12px' },
