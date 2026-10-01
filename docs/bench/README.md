@@ -84,9 +84,10 @@ checks, in both cascades, that an extension does or does not beat its parent's v
 mode, that reverse render order still resolves by declaration in `declared`, and that
 `getCssText()` in the browser is byte-identical to the server output. Each check runs in its own
 page, because an instance rooted at the document hydrates markers a previous instance left there.
+It also serves a file from `@stitches/static` as a same-origin `<link>` and checks that rendering a
+variant in it adds no style rule to any sheet: the runtime hydrated from the file.
 
-It is not in CI, since it needs a browser download; adding it is a `npx playwright install
-chromium` step plus `yarn test:browser`. It has already earned its keep: it found that a hydrated
+CI runs it after the build (it installs Chromium first). It has already earned its keep: it found that a hydrated
 but empty group was emitted as a bare `@media {}` wrapper, now guarded by a node test too.
 
 ## Native render cost

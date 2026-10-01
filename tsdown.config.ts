@@ -45,4 +45,23 @@ const native: UserConfig = {
 	outExtensions: ({ format }) => ({ js: format === 'cjs' ? '.cjs' : '.mjs' }),
 }
 
-export default defineConfig([pkg('stringify'), pkg('core'), pkg('react'), native])
+/**
+ * The static extractor runs at build time in Node, never in a browser, so it has no IIFE global.
+ * Its public types are hand-written in packages/static/types, like core's: the source works
+ * against core's internal instance type, which is not what a consumer holds.
+ */
+const staticPackage: UserConfig = {
+	entry: { index: 'packages/static/src/index.ts' },
+	outDir: 'packages/static/dist',
+	format: ['esm', 'cjs'],
+	platform: 'node',
+	target: 'es2020',
+	minify: true,
+	sourcemap: true,
+	dts: false,
+	clean: true,
+	hash: false,
+	outExtensions: ({ format }) => ({ js: format === 'cjs' ? '.cjs' : '.mjs' }),
+}
+
+export default defineConfig([pkg('stringify'), pkg('core'), pkg('react'), native, staticPackage])

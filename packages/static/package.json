@@ -1,0 +1,37 @@
+{
+  "name": "@stitches/static",
+  "version": "1.3.1-1",
+  "description": "Stitches at build time: every rule your components can produce, as one static stylesheet",
+  "type": "module",
+  "main": "dist/index.cjs",
+  "module": "dist/index.mjs",
+  "types": "types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./types/index.d.ts",
+      "require": "./dist/index.cjs",
+      "import": "./dist/index.mjs"
+    }
+  },
+  "files": [
+    "dist/*.cjs",
+    "dist/*.mjs",
+    "dist/*.map",
+    "types/*.d.ts"
+  ],
+  "sideEffects": false,
+  "license": "MIT",
+  "repository": "dsdeur/stitches",
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "build time",
+    "css",
+    "css-in-js",
+    "extraction",
+    "static",
+    "stitches",
+    "stylesheet"
+  ]
+}
