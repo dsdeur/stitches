@@ -106,6 +106,12 @@ prop values instead of a JSON string), and `styled` from +219% over hand-compute
 1.3 µs per card) to +10–15% (60–85 ns per card). `useStyle` costs the same as `styled` and adds no
 component to the tree. Run-to-run noise is a few percent; compare medians of several runs.
 
+What that is worth in an app is measured by `bench/native` (see its README): the same cards in a
+Release React Native build on an iOS simulator, with no styling, `StyleSheet`, `styled`, `useStyle`
+and compiled elements, timed to commit and to the next frame, with React Compiler off and on. There
+the native work of styling dominates, and stitches adds 0–2 ms (`useStyle`) or 2–6 ms (`styled`) to
+a 21–33 ms commit of 400 cards.
+
 ## Randomized differential checks
 
 `browser-differential.mts` (part of `yarn test:browser`) generates random compositions and props

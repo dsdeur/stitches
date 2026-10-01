@@ -148,12 +148,19 @@ const report = (mode, samples, count) => {
 	console.log(`\nReact Compiler ${mode}: ${count} cards, ${runs} samples per cell (each scenario in its own launches), ms from state change`)
 	for (const operation of operations) {
 		console.log(`\n  ${operation.padEnd(10)}  commit (p25–p75)        frame    vs StyleSheet   vs none`)
-		const commitOf = (name) => quantile(samples[name][operation].map((value) => value.commit), 0.5)
+		const commitOf = (name) =>
+			quantile(
+				samples[name][operation].map((value) => value.commit),
+				0.5,
+			)
 		for (const name of scenarios) {
 			const values = samples[name][operation]
 			const commits = values.map((value) => value.commit)
 			const commit = quantile(commits, 0.5)
-			const frame = quantile(values.map((value) => value.frame), 0.5)
+			const frame = quantile(
+				values.map((value) => value.frame),
+				0.5,
+			)
 			const spread = `(${format(quantile(commits, 0.25))}–${format(quantile(commits, 0.75)).trim()})`.padEnd(16)
 			const versus = (other) => (name === other ? '       ' : signed(commit - commitOf(other)))
 			console.log(`  ${name.padEnd(10)} ${format(commit)} ${spread} ${format(frame)}        ${versus('stylesheet')}   ${versus('none')}`)
