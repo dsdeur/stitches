@@ -45,8 +45,12 @@ const List = ({ Item, items }) => (
 	</ScrollView>
 )
 
-/** Resolves the pending measurement once React has committed: its layout effect runs after the commit. */
-const Probe = ({ step, onCommit }) => {
+/**
+ * Rendered last in the tree, so its render marks the end of React's render phase; its layout effect
+ * runs after the commit, which on Fabric includes the native shadow tree and its layout.
+ */
+const Probe = ({ step, onRender, onCommit }) => {
+	onRender(step)
 	useLayoutEffect(() => onCommit(step))
 	return null
 }
@@ -58,6 +62,11 @@ export const App = () => {
 	const [status, setStatus] = useState('starting')
 	const waiting = useRef(null)
 	const started = useRef(false)
+
+	const onRender = (step) => {
+		const pending = waiting.current
+		if (pending && pending.step === step) pending.rendered = performance.now()
+	}
 
 	const onCommit = (step) => {
 		const pending = waiting.current
@@ -73,13 +82,15 @@ export const App = () => {
 			const start = performance.now()
 			setState((previous) => {
 				const next = { ...change(previous), step: previous.step + 1 }
-				waiting.current = {
+				const entry = {
 					step: next.step,
+					rendered: undefined,
 					resolve: async (committed) => {
 						const frame = await nextFrame()
-						resolve({ commit: committed - start, frame: frame - start })
+						resolve({ render: entry.rendered - start, commit: committed - start, frame: frame - start })
 					},
 				}
+				waiting.current = entry
 				return next
 			})
 		})
@@ -131,7 +142,7 @@ export const App = () => {
 			<ThemeName.Provider value={state.themeName}>
 				<Provider theme={state.themeName === 'dark' ? dark : theme}>{Item ? <List Item={Item} items={items} /> : null}</Provider>
 			</ThemeName.Provider>
-			<Probe step={state.step} onCommit={onCommit} />
+			<Probe step={state.step} onRender={onRender} onCommit={onCommit} />
 		</View>
 	)
 }

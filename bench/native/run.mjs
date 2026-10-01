@@ -146,25 +146,20 @@ const signed = (ms) => `${ms >= 0 ? '+' : '-'}${Math.abs(ms).toFixed(2)}`.padSta
 
 const report = (mode, samples, count) => {
 	const runs = samples.none.mount.length
+	const median = (name, operation, pick) => quantile(samples[name][operation].map(pick), 0.5)
 	console.log(`\nReact Compiler ${mode}: ${count} cards, ${runs} samples per cell (each scenario in its own launches), ms from state change`)
+	console.log('render: React render phase; native: the rest of the commit (shadow tree, layout); commit: both')
 	for (const operation of operations) {
-		console.log(`\n  ${operation.padEnd(10)}  commit (p25–p75)        frame    vs StyleSheet   vs none`)
-		const commitOf = (name) =>
-			quantile(
-				samples[name][operation].map((value) => value.commit),
-				0.5,
-			)
+		console.log(`\n  ${operation.padEnd(10)}  render  native  commit (p25–p75)        frame    vs StyleSheet   vs none`)
 		for (const name of scenarios) {
-			const values = samples[name][operation]
-			const commits = values.map((value) => value.commit)
+			const commits = samples[name][operation].map((value) => value.commit)
 			const commit = quantile(commits, 0.5)
-			const frame = quantile(
-				values.map((value) => value.frame),
-				0.5,
-			)
+			const render = median(name, operation, (value) => value.render)
+			const native = median(name, operation, (value) => value.commit - value.render)
+			const frame = median(name, operation, (value) => value.frame)
 			const spread = `(${format(quantile(commits, 0.25))}–${format(quantile(commits, 0.75)).trim()})`.padEnd(16)
-			const versus = (other) => (name === other ? '       ' : signed(commit - commitOf(other)))
-			console.log(`  ${name.padEnd(10)} ${format(commit)} ${spread} ${format(frame)}        ${versus('stylesheet')}   ${versus('none')}`)
+			const versus = (other) => (name === other ? '       ' : signed(commit - median(other, operation, (value) => value.commit)))
+			console.log(`  ${name.padEnd(10)} ${format(render)}  ${format(native)} ${format(commit)} ${spread} ${format(frame)}        ${versus('stylesheet')}   ${versus('none')}`)
 		}
 	}
 }
