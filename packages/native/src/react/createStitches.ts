@@ -12,6 +12,8 @@ import { createStyleEngine, hasBreakpoint, type CssArgument, type MediaOf, type 
 interface Window {
 	readonly viewport: Viewport | undefined
 	readonly media: MediaContext
+	/** The theme too, so a responsive component reads one context, not two. */
+	readonly theme: ThemeValues
 }
 
 /** One instance's theme and breakpoints, as a component that renders compiled styled elements reads them. */
@@ -95,7 +97,7 @@ const isElementType = (value: unknown): value is React.ElementType => typeof val
  */
 export const createStitches = <const Config extends NativeConfig = NativeConfig>(init?: Config): ReactStitches<MediaOf<Config>> => {
 	const engine = createStyleEngine(init ?? {})
-	const noWindow: Window = { viewport: undefined, media: engine.mediaFor(undefined) }
+	const noWindow: Window = { viewport: undefined, media: engine.mediaFor(undefined), theme: engine.theme }
 	const defaultEnvironment: Environment = { theme: engine.theme, media: noWindow.media }
 	const ThemeContext = React.createContext<ThemeValues>(engine.theme)
 	const WindowContext = React.createContext<Window>(noWindow)
@@ -109,13 +111,18 @@ export const createStitches = <const Config extends NativeConfig = NativeConfig>
 		return false
 	}
 
-	/** The breakpoints in effect, subscribing to window changes only when the style needs them. */
-	const useMedia = (needed: boolean): MediaContext => {
-		if (canSkipWindow) return needed ? React.use(WindowContext).media : noWindow.media
+	/**
+	 * The theme and the breakpoints in effect, in one context read: the window context (which carries
+	 * the theme) when the style needs the window, the theme context alone when it does not, so a
+	 * rotation leaves it alone. Older React has no conditional `use`; it always reads the window
+	 * context, which is correct, just not selective.
+	 */
+	const useEnvironment = (needed: boolean): { readonly theme: ThemeValues; readonly media: MediaContext } => {
+		if (canSkipWindow) return needed ? React.use(WindowContext) : { theme: React.use(ThemeContext), media: noWindow.media }
 
-		const { media } = React.useContext(WindowContext)
+		const window = React.useContext(WindowContext)
 
-		return needed ? media : noWindow.media
+		return needed ? window : { theme: window.theme, media: noWindow.media }
 	}
 
 	/** What a styled component wraps and how it styles it, so extending one can reach both. */
@@ -154,7 +161,8 @@ export const createStitches = <const Config extends NativeConfig = NativeConfig>
 
 		const Styled = React.forwardRef<React.ComponentRef<Type>, StyledProps<Type, VariantsOf<readonly [Type, ...Definitions], MediaOf<Config>>>>((props, ref) => {
 			const source: PropsRecord = isRecord(props) ? props : {}
-			const forwarded = toElementProps(source, React.useContext(ThemeContext), useMedia(needsWindow(style, source, variantNames)))
+			const { theme, media } = useEnvironment(needsWindow(style, source, variantNames))
+			const forwarded = toElementProps(source, theme, media)
 
 			// React 19 treats `ref` as an ordinary prop; only forward one the caller actually gave.
 			if (ref !== null) forwarded.ref = ref
@@ -189,8 +197,7 @@ export const createStitches = <const Config extends NativeConfig = NativeConfig>
 
 	const useStyle = <Variants>(style: StyleFunction<Variants>, props?: Variants & { readonly css?: StyleObject }): NativeStyle => {
 		const source: PropsRecord = isRecord(props) ? props : {}
-		const theme = React.useContext(ThemeContext)
-		const media = useMedia(needsWindow(style, source, Object.keys(source)))
+		const { theme, media } = useEnvironment(needsWindow(style, source, Object.keys(source)))
 		const resolve = engine.resolverOf(style)
 
 		if (resolve) return resolve(source, theme, media)
@@ -208,15 +215,15 @@ export const createStitches = <const Config extends NativeConfig = NativeConfig>
 
 		// Keyed on the numbers, so `viewport={useWindowDimensions()}` does not re-render the responsive
 		// components below on each render of the provider, only when the size changes.
+		const activeTheme = theme ?? parentTheme
+
 		const window = React.useMemo<Window>(() => {
-			if (width === undefined || height === undefined) return noWindow
+			if (width === undefined || height === undefined) return activeTheme === engine.theme ? noWindow : { ...noWindow, theme: activeTheme }
 
 			const size = { width, height }
 
-			return { viewport: size, media: engine.mediaFor(size) }
-		}, [width, height])
-
-		const activeTheme = theme ?? parentTheme
+			return { viewport: size, media: engine.mediaFor(size), theme: activeTheme }
+		}, [width, height, activeTheme])
 
 		// The same, by instance, for components whose styled elements @stitches/native-babel compiled.
 		const parentEnvironments = React.useContext(EnvironmentsContext)
