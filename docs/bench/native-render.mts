@@ -5,7 +5,8 @@
  *
  * Baseline is what a React Native app writes without stitches: a component that passes a style
  * object computed once up front (what `StyleSheet.create` gives you). Against it, the same list
- * rendered through `styled()`, and through `useStyle()` (no extra component). Rounds alternate
+ * rendered through `styled()`, through `useStyle()` (no extra component), and as
+ * @stitches/native-babel compiles it (`styledElement`, no component per card). Rounds alternate
  * between the variants to cancel drift; see interleaved.mts for why that matters.
  *
  * Rendering is react-dom/server's renderToString under production React: synchronous, runs every
@@ -18,6 +19,8 @@ import * as React from 'react'
 import { renderToString } from 'react-dom/server'
 
 const native = await import(new URL('../../packages/native/dist/react.mjs', import.meta.url).href)
+
+const { styledElement, useStitchesEnvironment } = native
 
 const { styled, css, Provider, useStyle, theme } = native.createStitches({
 	theme: { colors: { surface: 'white', text: 'black', accent: 'blue' }, space: { 1: '4px', 2: '8px', 3: '16px' }, radii: { card: '8px' } },
@@ -56,17 +59,28 @@ const WrapperCard = React.forwardRef((props: { large: boolean; children?: React.
 const HookCard = (props: { large: boolean; children?: React.ReactNode }) => React.createElement('View', { style: useStyle(cardStyle, props.large ? { size: 'large', tone: 'accent', raised: true } : { size: 'small' }) }, props.children)
 
 const count = 1000
+
+/** What @stitches/native-babel compiles the styled list into: one hook, then styledElement calls. */
+const CompiledList = ({ generation }: { generation: number }) => {
+	const environments = useStitchesEnvironment()
+	return Array.from({ length: count }, (_, index) =>
+		(index + generation) % 3 === 0 ? styledElement(StyledCard, { size: 'large', tone: 'accent', raised: true }, index, environments) : styledElement(StyledCard, { size: 'small' }, index, environments),
+	)
+}
+
 const list = (kind: string, generation: number) =>
 	React.createElement(
 		Provider,
 		{ viewport },
-		Array.from({ length: count }, (_, index) => {
-			const large = (index + generation) % 3 === 0
-			if (kind === 'plain') return React.createElement(PlainCard, { key: index, large })
-			if (kind === 'hook') return React.createElement(HookCard, { key: index, large })
-			if (kind === 'wrapper') return React.createElement(WrapperCard, { key: index, large })
-			return React.createElement(StyledCard, large ? { key: index, size: 'large', tone: 'accent', raised: true } : { key: index, size: 'small' })
-		}),
+		kind === 'compiled'
+			? React.createElement(CompiledList, { generation })
+			: Array.from({ length: count }, (_, index) => {
+					const large = (index + generation) % 3 === 0
+					if (kind === 'plain') return React.createElement(PlainCard, { key: index, large })
+					if (kind === 'hook') return React.createElement(HookCard, { key: index, large })
+					if (kind === 'wrapper') return React.createElement(WrapperCard, { key: index, large })
+					return React.createElement(StyledCard, large ? { key: index, size: 'large', tone: 'accent', raised: true } : { key: index, size: 'small' })
+				}),
 	)
 
 /** Renders the list 21 times, a third of the cards changing variant each time. */
@@ -82,8 +96,9 @@ const measure = (kind: string): number => {
 	return performance.now() - start
 }
 
-const kinds = useStyle ? ['plain', 'wrapper', 'styled', 'hook'] : ['plain', 'styled']
-const results: Record<string, number[]> = { plain: [], wrapper: [], styled: [], hook: [] }
+// useStyle and styledElement are newer than styled; measure them where the build has them
+const kinds = ['plain', 'wrapper', 'styled', ...(useStyle ? ['hook'] : []), ...(styledElement ? ['compiled'] : [])]
+const results: Record<string, number[]> = Object.fromEntries(kinds.map((kind) => [kind, []]))
 
 // warm up every path, then interleave
 for (const kind of kinds) measure(kind)
