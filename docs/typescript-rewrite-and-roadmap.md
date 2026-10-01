@@ -271,6 +271,25 @@ process-global sheet that accumulates rules across requests.
 
 Packaging: `@stitches/compiler` (or `static`) with a Vite/Next plugin. No core API change.
 
+**Shipped 2026-09-30: `packages/static`.** `extractCss(stitches, sources, { responsive })` walks module
+namespaces or values, renders every component through the instance's own `css()` (so a `styled()`
+component, which cannot be called outside React, produces the same classes and group positions),
+and returns `getCssText()`. Per component it renders the defaults, every variant value, every
+compound variant, and, unless `responsive: false`, each of those at every `config.media` key.
+Themes, `globalCss()` and `keyframes()` results are recognised by shape and rendered. Step 4 above
+needed no new code: the runtime already hydrates from any same-origin stylesheet carrying `--sxs`
+markers, so a `<link>` to the file is enough. `yarn test:browser` checks exactly that, in both
+cascades: after the page loads the file, rendering a variant from it adds no style rule anywhere.
+
+What stays at runtime, and is documented in the package README: `css` props, a value placed at two
+breakpoints at once, a compound whose conditions hold at different breakpoints, components the walk
+does not reach, and every rule when the file is cross-origin (the CSSOM of a cross-origin sheet is
+unreadable). Under `'legacy'` the file's order is the extractor's visiting order, not the pages'
+render order, so the README recommends `'declared'`.
+
+Not built yet, each its own piece: a Vite plugin (load the style modules with `ssrLoadModule`, emit
+the file as an asset), and a strict mode that fails the build when a render would inject at runtime.
+
 ### 5.2 Utility class stylesheet (for agents writing HTML)
 
 Goal: a stylesheet with readable utility class names that reuses our tokens and themes, so
@@ -465,7 +484,8 @@ list; it now points here. Items marked done stay for context.
    slowness it was meant to fix does not reproduce on TypeScript 6 (see 10.2 and
    `docs/bench/type-perf/`).
 9. Composite border tokens via multi-scale `themeMap` (6.1). Done 2026-09-05.
-10. Static extraction (5.1).
+10. Static extraction (5.1). `@stitches/static` shipped 2026-09-30 as a function a build script calls;
+    a Vite plugin and a strict mode are the follow-ups.
 11. Utility sheet (5.2), after deciding A vs B vs both.
 12. Native adapter (5.3), after settling the shared vocabulary.
 

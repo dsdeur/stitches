@@ -13,7 +13,7 @@ describe('Publishable manifest', () => {
 		expect(toPublishableExports({ '.': { types: './types/index.d.ts', import: './src/index.ts' } })).toEqual({ '.': { types: './types/index.d.ts', import: './dist/index.mjs' } })
 	})
 
-	for (const name of ['core', 'react', 'stringify']) {
+	for (const name of ['core', 'react', 'static', 'stringify']) {
 		test(`@stitches/${name}: the published exports point at built files only`, () => {
 			const published = toPublishableExports(manifestOf(name).exports)
 
