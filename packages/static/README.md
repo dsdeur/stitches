@@ -73,6 +73,50 @@ development. A page that relies on that order can look different in production f
 in development. The extractor works in both modes, but `'declared'` is the one that makes the file
 predictable.
 
+## One plain stylesheet: `bundleCss`
+
+`extractCss` is for pages that run the stitches runtime. For a page that does not, a cached css
+file or an html page exported as a single file, `bundleCss` writes everything as plain css:
+
+```ts
+import { bundleCss } from '@stitches/static'
+
+const css = bundleCss(stitches, [components, styles])
+const html = `<!doctype html><style>${css}</style>${markup}`
+```
+
+In order: themes, global styles and keyframes, every component rule `extractCss` writes, then the
+utility classes below. Nothing in it is stitches-specific any more: the hydration markers and the
+unconditional `@media{}` groups the runtime keeps rules in are gone, and the rules and their order
+are exactly what the runtime would have produced. `toPlainCss(text)` does that step on its own.
+
+Do not load a bundle next to the runtime: without markers the runtime cannot tell the rules are
+there, and writes them all again.
+
+## Utility classes
+
+`bundleCss` appends a utility class for every token of every scale your `themeMap` points at, named
+after the css property, so an agent or a person writing html can style it with your design system
+and no components:
+
+```html
+<div class="padding-2 background-color-primary tablet:padding-3 hover:color-text">…</div>
+```
+
+- The value is the token's custom property (`var(--space-2)`), so a `createTheme()` class higher up
+  switches utilities the way it switches components.
+- Breakpoints from `config.media` come as `tablet:` prefixes, in `config.media` order, after the
+  plain utilities. States are opt-in: `{ utilities: { states: ['hover', 'focus-visible'] } }`.
+- Utilities come after component rules, so `class="${button()} color-primary"` overrides the
+  button's color.
+- Every property in `themeMap` is a lot of classes for a full theme. `{ utilities: { properties:
+['padding', 'gap', 'color', 'backgroundColor'] } }` narrows it; `{ utilities: false }` leaves
+  them out.
+
+`utilityClasses(stitches, options)` returns the same set as data (`className`, `property`, `value`,
+`media`, `state`), which is the vocabulary to put in an agent's prompt. `utilityCss` returns just
+their css.
+
 ## Server rendering
 
 If you ship the static file, the server does not need to put `getCssText()` into the page. With
