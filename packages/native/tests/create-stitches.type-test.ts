@@ -36,3 +36,17 @@ extended({ tone: 'quiet' })
 
 // A theme is passed as the second argument, not guessed at.
 button({ size: 'large' }, createTheme({ space: { 1: '8px' } }))
+
+// An extension adding a value to an inherited variant accepts both, plain and per breakpoint.
+{
+	const { css: tonal } = createStitches({ media: { md: '(min-width: 1px)' } })
+	const base = tonal({ variants: { tone: { muted: { opacity: 0.5 } } } })
+	const loud = tonal(base, { variants: { tone: { loud: { opacity: 1 } } } })
+
+	loud({ tone: 'muted' })
+	loud({ tone: 'loud' })
+	loud({ tone: { '@initial': 'muted', '@md': 'loud' } })
+
+	// @ts-expect-error still only the values either composer declares
+	loud({ tone: 'quiet' })
+}

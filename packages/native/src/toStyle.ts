@@ -1,6 +1,7 @@
 import type { NativeStyle, StyleObject, ThemeValues } from './types.ts'
 import type { MediaContext } from './mediaContext.ts'
 import { toNativeValue } from './values.ts'
+import { coveredBy } from './shorthands.ts'
 
 /** `$token` or `$scale$token`, the same spelling the web config uses. */
 const reference = /\$(?:([\w-]+)\$)?([\w-]+)/g
@@ -55,6 +56,9 @@ export const toStyle = (definition: StyleObject, context: StyleContext, into: Na
 			if (isStyleObject(value) && context.media.matches(property)) blocks.push([context.media.order(property), value])
 			continue
 		}
+
+		// A later shorthand overrides the longhands before it, as on the web; see shorthands.ts.
+		for (const longhand of coveredBy(property)) delete into[longhand]
 
 		into[property] = typeof value === 'string' ? toValue(property, value, context) : value
 	}
