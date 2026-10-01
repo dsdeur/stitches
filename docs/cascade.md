@@ -165,16 +165,26 @@ never carries two atomic classes that compete for the same property under the sa
 conditions, so the `cascade` option has no say over components in this mode: they resolve by the
 declared rules, whatever `cascade` is set to. Themes and globals are unchanged (rule 5).
 
-The sheet still orders what can overlap on one element:
+Merging also drops every earlier declaration a later one covers: the same property (or one a later
+shorthand resets) under the same selector and the same conditions or more of them. An unconditional
+`css` prop therefore removes a variant's breakpoint value for that property, exactly as in
+`'declared'`. Checked in a real browser: every variant combination of a three-level composition,
+with shorthands, compound variants, the `css` prop and responsive props, resolves to the same
+computed styles in both modes (`yarn test:browser`).
 
-- **Breakpoints after unconditional styles**, then breakpoints in `config.media` order. This is the
-  one place atomic output differs from `'declared'`: a style under `@bp1` beats an unconditional one
-  wherever `@bp1` matches, even when the unconditional one was declared later. Rule 4 orders
-  breakpoints only within one variant; in atomic output every rule sharing a breakpoint shares a
-  position, so breakpoints rank after unconditional styles across the board.
+The sheet still orders what survives and can overlap on one element:
+
+- **Breakpoints after unconditional styles**, then breakpoints in `config.media` order. What is left
+  to order here is an earlier unconditional value under a later breakpoint value, which this
+  resolves as `'declared'` does. The one case it cannot: two *different* breakpoints that both
+  match, declared in the opposite order to `config.media` (`@lg` in the base, `@md` in a variant).
+  Atomic output gives the later breakpoint in `config.media` the win; `'declared'` gives it to the
+  later declaration.
 - **Shorthands before longhands.** A shorthand declared after a longhand removes it from the
   element (`padding: 0` after `paddingTop: 8` leaves only `padding: 0`), so a longhand that is still
-  there was declared later and should win, and it sorts after. Two shorthands that only partly
+  there was declared later and should win, and it sorts after. When that later longhand meets an
+  earlier shorthand under a breakpoint (`paddingTop: 1` after `'@md': { padding: 3 }`), it is also
+  written under the breakpoint, so it sorts after the shorthand there too. Two shorthands that only partly
   overlap on one element (`borderTop` and `borderColor`) have no fixed order between them; avoid
   mixing them on one element.
 - **Pseudo-classes in a fixed order:** `:link`, `:visited`, `:hover`, `:focus-within`, `:focus`,

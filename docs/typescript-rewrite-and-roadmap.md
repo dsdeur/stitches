@@ -297,9 +297,12 @@ fixed order. `toCssRules` was split so atomic output reuses the whole conversion
 reports each declaration; `toCssRules` groups them into rules exactly as before, verified
 byte-identical with `classname-parity.mts`). The usage constraint turned out smaller than expected:
 components keep their own class on the element, without rules, so `${Button}` selectors still work;
-what stops working is a selector written against a variant class. One deliberate difference from
-`'declared'`: a breakpoint style beats an unconditional one wherever it matches, even when declared
-earlier. Documented in `docs/cascade.md`; checked in a real browser by `yarn test:browser`.
+what stops working is a selector written against a variant class. Merging drops every earlier
+declaration a later one covers (same selector, same or reset property, same or more conditions), and
+restates a later longhand under an earlier breakpoint shorthand, so atomic output resolves exactly
+like `'declared'`: a differential check in `yarn test:browser` renders 480 variant combinations in
+both modes and compares computed styles. The one remaining difference is two different breakpoints
+declared against `config.media` order. Documented in `docs/cascade.md`.
 
 Decision note (2026-09-05): the usage constraint in B is acceptable ("components must be
 used a certain way, same as `li` in `ul`"). So B is not ruled out. Open question: which

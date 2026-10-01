@@ -87,6 +87,37 @@ describe('atomic output', () => {
 		expect(rules.indexOf('{padding:4px}') < rules.indexOf('{padding-top:12px}')).toBe(true)
 	})
 
+	test('a later unconditional value drops earlier breakpoint values of the property, so the css prop always wins', () => {
+		const { css, getCssText } = createStitches({ atomic: true, root: null, media: { md: '(min-width: 768px)' } })
+
+		const { className } = css({ variants: { size: { l: { paddingLeft: 7 } } } })({ size: { '@md': 'l' }, css: { paddingLeft: 5 } })
+
+		expect(declarationsOf(getCssText(), className)).toEqual(['padding-left:5px'])
+	})
+
+	test('a later longhand over an earlier breakpoint shorthand is restated under that breakpoint', () => {
+		const { css, getCssText } = createStitches({ atomic: true, root: null, media: { md: '(min-width: 768px)' } })
+
+		const base = css({ variants: { size: { l: { padding: 3 } } } })
+		const { className } = css(base, { paddingTop: 1 })({ size: { '@md': 'l' } })
+
+		// the shorthand still sets the other sides at md; the longhand applies everywhere and, at md,
+		// is written again after the shorthand so it still wins there
+		expect(declarationsOf(getCssText(), className)).toEqual(['padding:3px', 'padding-top:1px', 'padding-top:1px'])
+		expect(getCssText()).toMatch(/@media \(min-width: 768px\)\{\.a-\w+\{padding:3px\}\}@media \(min-width: 768px\)\{\.a-\w+\{padding-top:1px\}\}/)
+	})
+
+	test('two different breakpoints declared against config.media order: the later breakpoint wins (the one documented difference)', () => {
+		const { css, getCssText } = createStitches({ atomic: true, root: null, media: { md: '(min-width: 768px)', lg: '(min-width: 1200px)' } })
+
+		// declared order says md's blue is later; atomic output keeps both and puts lg last
+		const { className } = css({ '@lg': { color: 'green' }, 'variants': { tone: { on: { '@md': { color: 'blue' } } } } })({ tone: 'on' })
+
+		expect(declarationsOf(getCssText(), className)).toEqual(['color:green', 'color:blue'])
+		const rules = rulesOf(getCssText())
+		expect(rules.indexOf('{color:blue}') < rules.indexOf('{color:green}')).toBe(true)
+	})
+
 	test('breakpoints follow unconditional rules, in config.media order', () => {
 		const { css, getCssText } = createStitches({ atomic: true, root: null, media: { md: '(min-width: 768px)', lg: '(min-width: 1200px)' } })
 

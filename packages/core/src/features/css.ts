@@ -355,7 +355,7 @@ const createRenderer = (config: StitchesConfig, internals: ResolvedInternals, sh
 
 				const merged = new Map<string, Atom>()
 
-				for (const [, , , cacheKey, style] of pieces) mergeAtoms(merged, atomsOf(cacheKey, style))
+				for (const [, , , cacheKey, style] of pieces) mergeAtoms(merged, atomsOf(cacheKey, style), config)
 
 				mergedBySelection.set(selection, (atoms = [...merged.values()]))
 			}

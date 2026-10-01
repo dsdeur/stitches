@@ -16,8 +16,10 @@ import { toTailDashed } from '../convert/toTailDashed.ts'
  *
  * The sheet only has to order what can still overlap on one element:
  * - **conditions**: unconditional declarations, then each `config.media` breakpoint in its order,
- *   then any other condition. A breakpoint style therefore beats an unconditional one wherever it
- *   matches, whichever was declared later.
+ *   then any other condition. Merging already dropped every earlier declaration a later one covers
+ *   (see mergeAtoms), so what overlaps here is a later breakpoint style over an earlier unconditional
+ *   one, which this order resolves the way the declared cascade does. The one case it cannot is two
+ *   different breakpoints that both match, declared in the opposite order to `config.media`.
  * - **shorthands**: `padding` before `padding-top`. Merging drops longhands a later shorthand
  *   resets, so a longhand still present was meant to win, and it sorts after.
  * - **pseudo-classes**: in a fixed order, `:link` < `:visited` < `:hover` < `:focus-within` <
@@ -26,9 +28,13 @@ import { toTailDashed } from '../convert/toTailDashed.ts'
 export interface Atom {
 	/** The selector template (`&` stands for the atom's class), conditions and property this declaration fills. */
 	readonly slot: string
-	/** The slot's selector and conditions without the property, for dropping longhands a shorthand resets. */
-	readonly scope: string
+	/** The selector template; atoms only compete with atoms of the same template. */
+	readonly selector: string
+	/** The at-rule conditions it applies under, outermost first. */
+	readonly conditions: readonly string[]
 	readonly property: string
+	/** `property:value`, as written into the rule. */
+	readonly declaration: string
 	readonly className: string
 	readonly cssText: string
 	/** Which sheet group, `atomic<bucket>`, the rule belongs to. */
@@ -149,6 +155,26 @@ const toBucket = (conditions: readonly string[], config: StitchesConfig): number
 
 const placeholder = '&'
 
+/** One declaration under a selector template and conditions, as an atom. */
+const toAtom = (declaration: string, template: string, conditions: readonly string[], config: StitchesConfig): Atom => {
+	const colon = declaration.indexOf(':')
+	const property = declaration.charCodeAt(0) === 64 || colon === -1 ? declaration : declaration.slice(0, colon)
+	const className = `${toTailDashed(config.prefix)}a-${toHash([conditions, template, declaration])}`
+	const selector = template.replace(/&/g, `.${className}`)
+
+	return {
+		slot: `${conditions.join('\u0001')}\u0000${template}\u0000${property}`,
+		selector: template,
+		conditions,
+		property,
+		declaration,
+		className,
+		cssText: `${conditions.map((condition) => `${condition}{`).join('')}${selector}{${declaration}}${'}'.repeat(conditions.length)}`,
+		bucket: toBucket(conditions, config),
+		key: propertyRank(property) * 100 + pseudoRank(template),
+	}
+}
+
 /** Every declaration of a style object as an atom, in the order the style writes them. */
 export const toAtoms = (style: CSSObject, config: StitchesConfig): Atom[] => {
 	const atoms: Atom[] = []
@@ -158,43 +184,48 @@ export const toAtoms = (style: CSSObject, config: StitchesConfig): Atom[] => {
 		[placeholder],
 		[],
 		config,
-		(declaration, selectors, conditions) => {
-			const colon = declaration.indexOf(':')
-			const property = declaration.charCodeAt(0) === 64 || colon === -1 ? declaration : declaration.slice(0, colon)
-			const template = selectors.join(',')
-			const scope = `${conditions.join('\u0001')}\u0000${template}`
-			const className = `${toTailDashed(config.prefix)}a-${toHash([conditions, template, declaration])}`
-			const selector = template.replace(/&/g, `.${className}`)
-
-			atoms.push({
-				slot: `${scope}\u0000${property}`,
-				scope,
-				property,
-				className,
-				cssText: `${conditions.map((condition) => `${condition}{`).join('')}${selector}{${declaration}}${'}'.repeat(conditions.length)}`,
-				bucket: toBucket(conditions, config),
-				key: propertyRank(property) * 100 + pseudoRank(template),
-			})
-		},
+		(declaration, selectors, conditions) => atoms.push(toAtom(declaration, selectors.join(','), [...conditions], config)),
 		() => undefined,
 	)
 
 	return atoms
 }
 
+/** Whether `later` applies everywhere `earlier` does: its conditions are a subset of the earlier one's. */
+const covers = (later: Atom, earlier: Atom): boolean => later.selector === earlier.selector && later.conditions.every((condition) => earlier.conditions.includes(condition))
+
 /**
- * Merges atoms in the order given, later winning. A shorthand drops the longhands it resets that
- * came before it in the same scope, as it would in one css rule; `all` drops everything in its scope.
+ * Merges atoms in the order given, later winning, the way the declared cascade would resolve them.
+ *
+ * A later declaration drops every earlier one it covers: same selector, the same property or one it
+ * resets as a shorthand (`all` resets everything), under the same conditions or more of them. An
+ * earlier one that applies only where the later one does could never win, so this is exactly the
+ * declared result, including an unconditional `css` prop beating a variant under a breakpoint.
+ *
+ * One overlap cannot be dropped: a later longhand over an earlier shorthand under more conditions
+ * (`paddingTop: 1` after `'@md': { padding: 3 }`), since the shorthand's other sides still apply.
+ * The sheet would put the breakpoint's shorthand last, so the longhand is also written under the
+ * shorthand's conditions, where it sorts after the shorthand and wins exactly where it should.
+ *
+ * What survives can still overlap (an earlier unconditional value under a later breakpoint one),
+ * and the sheet orders those.
  */
-export const mergeAtoms = (merged: Map<string, Atom>, atoms: readonly Atom[]): void => {
-	for (const atom of atoms) {
-		if (atom.property === 'all') {
-			for (const [slot, existing] of merged) if (existing.scope === atom.scope) merged.delete(slot)
-		} else {
-			for (const longhand of resetsOf(atom.property)) merged.delete(`${atom.scope}\u0000${longhand}`)
+export const mergeAtoms = (merged: Map<string, Atom>, atoms: readonly Atom[], config: StitchesConfig): void => {
+	const add = (atom: Atom): void => {
+		const resets = resetsOf(atom.property)
+		const restated: Atom[] = []
+
+		for (const [slot, existing] of merged) {
+			if (!covers(atom, existing)) continue
+
+			if (atom.property === 'all' || existing.property === atom.property || resets.includes(existing.property)) merged.delete(slot)
+			else if (existing.conditions.length > atom.conditions.length && resetsOf(existing.property).includes(atom.property)) restated.push(toAtom(atom.declaration, atom.selector, existing.conditions, config))
 		}
 
-		merged.delete(atom.slot)
 		merged.set(atom.slot, atom)
+
+		for (const copy of restated) add(copy)
 	}
+
+	for (const atom of atoms) add(atom)
 }
