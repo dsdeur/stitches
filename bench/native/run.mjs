@@ -147,10 +147,13 @@ for (const mode of modes) {
 	const app = buildApp(device, env)
 
 	// installed and launched with simctl, which needs no Simulator window: the run works over SSH
-	const results = receiveResults(15 * 60 * 1000)
+	const { results, watch } = receiveResults(15 * 60 * 1000)
 	terminate(device)
 	run('xcrun', ['simctl', 'install', device.udid, app])
-	run('xcrun', ['simctl', 'launch', device.udid, 'dev.stitches.bench'])
+	// prints "dev.stitches.bench: <pid>"
+	const launched = execFileSync('xcrun', ['simctl', 'launch', device.udid, 'dev.stitches.bench'], { encoding: 'utf8' }).trim()
+	console.log(launched)
+	watch(Number(launched.split(': ').pop()))
 
 	const received = await results
 	terminate(device)
