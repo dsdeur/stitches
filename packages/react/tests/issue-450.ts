@@ -1,25 +1,13 @@
+// @vitest-environment jsdom
 import * as React from 'react'
-import * as renderer from 'react-test-renderer'
 import { createStitches } from '../src/index.ts'
+import { render } from './helpers/render.ts'
 
-import type { ReactTestRendererJSON } from 'react-test-renderer'
-
-const RenderOf = (element: React.ReactElement): ReactTestRendererJSON => {
-	let Rendered: renderer.ReactTestRenderer | undefined
-
-	void renderer.act(() => {
-		Rendered = renderer.create(element)
-	})
-
-	if (Rendered === undefined) throw new Error('Rendered is undefined')
-	const json = Rendered.toJSON()
-	if (json === null || Array.isArray(json)) throw new Error('unexpected toJSON result')
-	return json
-}
+const RenderOf = (element: React.ReactElement): Element => render(element).element
 
 describe('Issue #450', () => {
 	test('Compound variants apply to composed components (basic)', () => {
-		const { styled, getCssText } = createStitches()
+		const { styled, getCssText } = createStitches({ root: null })
 
 		const Happy = styled('div', {
 			'--is-happy': true,
@@ -43,7 +31,7 @@ describe('Issue #450', () => {
 			},
 		})
 
-		expect(RenderOf(React.createElement(Happy, null)).props.className).toBe(`c-fEpFmO c-fEpFmO-cfZmSQ-fulfilled-positively c-fEpFmO-FgYNE-satisfied-definitely`)
+		expect(RenderOf(React.createElement(Happy, null)).className).toBe(`c-fEpFmO c-fEpFmO-cfZmSQ-fulfilled-positively c-fEpFmO-FgYNE-satisfied-definitely`)
 
 		expect(getCssText()).toBe(
 			// composition styles
@@ -59,7 +47,7 @@ describe('Issue #450', () => {
 	})
 
 	test('Compound variants apply to composed components (complex)', () => {
-		const { styled } = createStitches()
+		const { styled } = createStitches({ root: null })
 
 		const Tile = styled('div', {
 			'--tile': 1,
@@ -101,18 +89,7 @@ describe('Issue #450', () => {
 			},
 		})
 
-		const RenderOf2 = (element: React.ReactElement): ReactTestRendererJSON => {
-			let Rendered: renderer.ReactTestRenderer | undefined
-
-			void renderer.act(() => {
-				Rendered = renderer.create(element)
-			})
-
-			if (Rendered === undefined) throw new Error('Rendered is undefined')
-			const json = Rendered.toJSON()
-			if (json === null || Array.isArray(json)) throw new Error('unexpected toJSON result')
-			return json
-		}
+		const RenderOf2 = RenderOf
 
 		const tileComponentClass = `c-kTjQBa`
 		const roundedTileComponentClass = `c-gLsErE`
@@ -124,28 +101,28 @@ describe('Issue #450', () => {
 		// Normal variants
 
 		// renders { appearance: "primary"; color: "red" }, neither empty variant will render
-		expect(RenderOf2(React.createElement(Tile)).props.className).toBe(tileComponentClass)
+		expect(RenderOf2(React.createElement(Tile)).className).toBe(tileComponentClass)
 
 		// renders { appearance: "primary"; color: "lightBlue" }, the { color: "lightBlue" } variant will render
-		expect(RenderOf2(React.createElement(Tile, { color: 'lightBlue' })).props.className).toBe(`${tileComponentClass} ${variantLightBlueClass}`)
+		expect(RenderOf2(React.createElement(Tile, { color: 'lightBlue' })).className).toBe(`${tileComponentClass} ${variantLightBlueClass}`)
 
 		// Compound variants
 
 		// renders { appearance: "secondary"; color: "lightBlue" }, the { appearance: "secondary" } variant will render
-		expect(RenderOf2(React.createElement(Tile, { appearance: 'secondary' })).props.className).toBe(`${tileComponentClass} ${variantAppearanceSecondaryClass}`)
+		expect(RenderOf2(React.createElement(Tile, { appearance: 'secondary' })).className).toBe(`${tileComponentClass} ${variantAppearanceSecondaryClass}`)
 
 		// renders { appearance: "secondary"; color: "lightBlue" }, the { appearance: "secondary" }, { color: "lightBlue" } variants will render
-		expect(RenderOf2(React.createElement(Tile, { appearance: 'secondary', color: 'lightBlue' })).props.className).toBe(`${tileComponentClass} ${variantAppearanceSecondaryClass} ${variantLightBlueClass} ${variantCompoundClass}`)
+		expect(RenderOf2(React.createElement(Tile, { appearance: 'secondary', color: 'lightBlue' })).className).toBe(`${tileComponentClass} ${variantAppearanceSecondaryClass} ${variantLightBlueClass} ${variantCompoundClass}`)
 
 		// Restyled compound variants (compound is activated implicitly by defaultVariants)
 
 		// appearance: primary, color: red, +
-		expect(RenderOf2(React.createElement(RoundedTile)).props.className).toBe(`${tileComponentClass} ${roundedTileComponentClass} ${variantAppearanceSecondaryClass} ${variantLightBlueClass} ${variantCompoundClass}`)
+		expect(RenderOf2(React.createElement(RoundedTile)).className).toBe(`${tileComponentClass} ${roundedTileComponentClass} ${variantAppearanceSecondaryClass} ${variantLightBlueClass} ${variantCompoundClass}`)
 
 		// Restyled compound variants (compound is activated explicitly by props)
 
 		// appearance: secondary, compound * 2, +
-		expect(RenderOf2(React.createElement(RoundedTile, { appearance: 'secondary', color: 'lightBlue' })).props.className).toBe(
+		expect(RenderOf2(React.createElement(RoundedTile, { appearance: 'secondary', color: 'lightBlue' })).className).toBe(
 			`${tileComponentClass} ${roundedTileComponentClass} ${variantAppearanceSecondaryClass} ${variantLightBlueClass} ${variantCompoundClass}`,
 		)
 	})

@@ -1,10 +1,11 @@
+// @vitest-environment jsdom
 import * as React from 'react'
-import * as renderer from 'react-test-renderer'
+import { render } from './helpers/render.ts'
 import { createStitches } from '../src/index.ts'
 
 describe('Ref forwarding', () => {
 	test('a ref reaches the component being styled', () => {
-		const { styled } = createStitches()
+		const { styled } = createStitches({ root: null })
 
 		let received: unknown = 'not called'
 		const Target = React.forwardRef((props: Record<string, unknown>, ref) => {
@@ -14,9 +15,7 @@ describe('Ref forwarding', () => {
 		const Styled = styled(Target, { color: 'red' })
 		const ref = React.createRef<HTMLDivElement>()
 
-		renderer.act(() => {
-			renderer.create(React.createElement(Styled, { ref }))
-		})
+		render(React.createElement(Styled, { ref }))
 
 		expect(received).toBe(ref)
 	})
@@ -24,19 +23,19 @@ describe('Ref forwarding', () => {
 	test('no ref prop is added to the element when the caller passes none', () => {
 		// React 19 treats `ref` as an ordinary prop, so assigning it unconditionally would leave
 		// `ref: null` on every rendered element.
-		const { styled } = createStitches()
+		const { styled } = createStitches({ root: null })
 
-		const Div = styled('div', { color: 'red' })
+		// A host element cannot show a null ref, so observe the props React hands a component instead.
+		let received: Record<string, unknown> = {}
+		const Probe = (props: Record<string, unknown>) => {
+			received = props
+			return React.createElement('div', { className: String(props.className) })
+		}
+		const Div = styled(Probe, { color: 'red' })
 
-		let wrapper: renderer.ReactTestRenderer | undefined
-		renderer.act(() => {
-			wrapper = renderer.create(React.createElement(Div))
-		})
+		render(React.createElement(Div))
 
-		const json = wrapper?.toJSON()
-		if (!json || Array.isArray(json)) throw new Error('unexpected render output')
-
-		expect('ref' in json.props).toBe(false)
-		expect(json.props.className).toBe('c-gmqXFB')
+		expect('ref' in received).toBe(false)
+		expect(received.className).toBe('c-gmqXFB')
 	})
 })
