@@ -100,16 +100,33 @@ Mac mini (M4), iPhone 17 simulator on iOS 26.0, Release, `@stitches/native` from
 | `styled`          | 25.5 (+3.0) | 23.8 (+1.8) | 33.2 (+5.9) |
 | compiled          | 25.5 (+3.0) | 24.4 (+2.4) | 32.2 (+4.8) |
 
+Split into React's render phase (on Fabric this includes creating each element's native node) and
+the rest of the commit (the shadow tree diff and layout), React Compiler off:
+
+| ms           | render: mount | update | theme | native: mount | update | theme |
+| ------------ | ------------- | ------ | ----- | ------------- | ------ | ----- |
+| no styling   | 11.5          | 7.7    | 7.2   | 3.2           | 0.0    | 0.0   |
+| `StyleSheet` | 16.6          | 12.6   | 15.9  | 3.7           | 11.7   | 12.3  |
+| `useStyle`   | 17.4          | 14.1   | 17.0  | 3.7           | 11.6   | 12.3  |
+| `styled`     | 21.2          | 15.9   | 18.7  | 3.9           | 11.3   | 12.4  |
+| compiled     | 20.9          | 17.2   | 21.3  | 4.0           | 11.2   | 12.6  |
+
 What this says:
 
-- Styling at all is the large cost, and it is native: laying out cards that change size and
-  measuring their text again. `StyleSheet` costs 6 to 8 ms over no styling on mount and 16 to 26 ms
-  on an update or theme switch, where an unstyled list does almost nothing.
-- On top of that, `useStyle` costs nothing measurable, and `styled` 2 to 6 ms, about 10 to 20% of the
-  commit. The interquartile ranges are 3 to 10 ms wide on update and theme, so differences under
-  about 2 ms are within noise.
-- Compiling with `@stitches/native-babel` does not beat `styled` here, although it does in the
-  JS-only benchmark. Removing the component is not where the cost is; what `styled` and the
-  compiled form share (copying props to drop the variants) is the candidate.
+- Styling at all is the large cost: laying out cards that change size and measuring their text
+  again. `StyleSheet` costs 6 to 8 ms over no styling on mount and 16 to 26 ms on an update or theme
+  switch, where an unstyled list does almost nothing.
+- Stitches adds nothing to the native side: the native part of the commit is the same for every way
+  of styling. Everything it costs is in the render phase.
+- `useStyle` is within 1 to 1.5 ms of `StyleSheet`. `styled` and compiled elements cost 3 to 5 ms more
+  per 400 cards (1200 styled elements). Each scenario's two launches agree to within about 1 ms, so
+  these differences are consistent, although the interquartile ranges are wide: rounds alternate
+  between generations and themes, which differ systematically.
+- Compiling with `@stitches/native-babel` does not beat `styled`, and is about 1.5 ms slower on update
+  and theme switch, although it wins the JS-only benchmark.
+- On Hermes, `MICRO=1` times the pieces of one element outside React: the style lookup is about 330
+  ns, the props split about 190 ns, and `styledElement` about 0.5 µs more than a lookup plus
+  `createElement` (the `useStyle` shape). That accounts for about 0.6 ms of the 3 to 5 ms; where
+  the rest goes inside a real render is not yet known.
 - React Compiler removes the floor (an unchanged card is skipped), but not the styling cost: half
   the cards change on every update, and those are laid out again whichever way they are styled.
