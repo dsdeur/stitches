@@ -2,17 +2,23 @@ import * as React from 'react'
 import type { NativeConfig, NativeStyle, StyleObject, ThemeValues, VariantsOf } from '../types.ts'
 import type { Viewport } from '../media.ts'
 import type { MediaContext } from '../mediaContext.ts'
-import { createStyleEngine, type CssArgument, type MediaOf, type PropsRecord, type Resolver, type Stitches, type StyleFunction } from '../createStitches.ts'
+import { createStyleEngine, hasBreakpoint, type CssArgument, type MediaOf, type PropsRecord, type Resolver, type Stitches, type StyleFunction } from '../createStitches.ts'
 
 /**
- * What styled components read while rendering: the theme to resolve tokens with, the window, and
- * which breakpoints hold for it, worked out once by the provider rather than by every component.
+ * The window as styled components read it: its size, and which breakpoints hold for it, worked out
+ * once by the provider rather than by every component. Kept apart from the theme, so a component
+ * whose styles cannot depend on the window does not even read it, and a rotation leaves it alone.
  */
-interface Environment {
-	readonly theme: ThemeValues
+interface Window {
 	readonly viewport: Viewport | undefined
 	readonly media: MediaContext
 }
+
+/**
+ * React 19's `use` may be called conditionally, which is what lets a component read the window only
+ * when its styles depend on it. Older React reads it always: correct, just not selective.
+ */
+const canSkipWindow = typeof React.use === 'function'
 
 export interface ProviderProps {
 	/** A theme from `createTheme()`, or the default one. Inherits the enclosing provider's when left out. */
@@ -69,7 +75,27 @@ const isElementType = (value: unknown): value is React.ElementType => typeof val
  */
 export const createStitches = <const Config extends NativeConfig = NativeConfig>(init?: Config): ReactStitches<MediaOf<Config>> => {
 	const engine = createStyleEngine(init ?? {})
-	const Context = React.createContext<Environment>({ theme: engine.theme, viewport: undefined, media: engine.mediaFor(undefined) })
+	const noWindow: Window = { viewport: undefined, media: engine.mediaFor(undefined) }
+	const ThemeContext = React.createContext<ThemeValues>(engine.theme)
+	const WindowContext = React.createContext<Window>(noWindow)
+
+	/** Whether a style can depend on the window: a breakpoint in its definitions or its `css` prop, or a per-breakpoint prop. */
+	const needsWindow = (style: object, props: PropsRecord, variantNames: Iterable<string>): boolean => {
+		if (engine.hasBreakpoints(style) || hasBreakpoint(props.css)) return true
+
+		for (const name of variantNames) if (isRecord(props[name])) return true
+
+		return false
+	}
+
+	/** The breakpoints in effect, subscribing to window changes only when the style needs them. */
+	const useMedia = (needed: boolean): MediaContext => {
+		if (canSkipWindow) return needed ? React.use(WindowContext).media : noWindow.media
+
+		const { media } = React.useContext(WindowContext)
+
+		return needed ? media : noWindow.media
+	}
 
 	/** What a styled component wraps and how it styles it, so extending one can reach both. */
 	const styledParts = new WeakMap<object, { readonly type: React.ElementType; readonly style: StyleFunction<unknown> }>()
@@ -85,8 +111,9 @@ export const createStitches = <const Config extends NativeConfig = NativeConfig>
 		const variantNames = new Set(style.composers.flatMap((composer) => composer.variantNames))
 
 		const Styled = React.forwardRef<React.ComponentRef<Type>, StyledProps<Type, VariantsOf<readonly [Type, ...Definitions], MediaOf<Config>>>>((props, ref) => {
-			const { theme, media } = React.useContext(Context)
 			const source: PropsRecord = isRecord(props) ? props : {}
+			const theme = React.useContext(ThemeContext)
+			const media = useMedia(needsWindow(style, source, variantNames))
 
 			// The resolver reads the variants and `css` straight from the props; everything else but
 			// `as` and `style` is forwarded, so this is the one copy of the props a render makes.
@@ -120,31 +147,35 @@ export const createStitches = <const Config extends NativeConfig = NativeConfig>
 	}
 
 	const useStyle = <Variants>(style: StyleFunction<Variants>, props?: Variants & { readonly css?: StyleObject }): NativeStyle => {
-		const { theme, media } = React.useContext(Context)
+		const source: PropsRecord = isRecord(props) ? props : {}
+		const theme = React.useContext(ThemeContext)
+		const media = useMedia(needsWindow(style, source, Object.keys(source)))
 		const resolve = engine.resolverOf(style)
 
-		if (resolve) return resolve(isRecord(props) ? props : {}, theme, media)
+		if (resolve) return resolve(source, theme, media)
 
 		// a style function from another instance: its own path, with this provider's theme
 		return style(props, theme)
 	}
 
 	const Provider = ({ theme, viewport, children }: ProviderProps): React.ReactElement => {
-		const parent = React.useContext(Context)
-		const activeTheme = theme ?? parent.theme
-		const activeViewport = viewport ?? parent.viewport
+		const parentTheme = React.useContext(ThemeContext)
+		const parentWindow = React.useContext(WindowContext)
+		const activeViewport = viewport ?? parentWindow.viewport
 		const width = activeViewport?.width
 		const height = activeViewport?.height
 
-		// Keyed on the numbers, so `viewport={useWindowDimensions()}` does not re-render every styled
-		// component below on each render of the provider.
-		const value = React.useMemo<Environment>(() => {
-			const size = width === undefined || height === undefined ? undefined : { width, height }
+		// Keyed on the numbers, so `viewport={useWindowDimensions()}` does not re-render the responsive
+		// components below on each render of the provider, only when the size changes.
+		const window = React.useMemo<Window>(() => {
+			if (width === undefined || height === undefined) return noWindow
 
-			return { theme: activeTheme, viewport: size, media: engine.mediaFor(size) }
-		}, [activeTheme, width, height])
+			const size = { width, height }
 
-		return React.createElement(Context.Provider, { value }, children)
+			return { viewport: size, media: engine.mediaFor(size) }
+		}, [width, height])
+
+		return React.createElement(ThemeContext.Provider, { value: theme ?? parentTheme }, React.createElement(WindowContext.Provider, { value: window }, children))
 	}
 
 	return {
@@ -155,7 +186,7 @@ export const createStitches = <const Config extends NativeConfig = NativeConfig>
 		config: engine.config,
 		styled,
 		Provider,
-		useTheme: () => React.useContext(Context).theme,
+		useTheme: () => React.useContext(ThemeContext),
 		useStyle,
 	}
 }

@@ -433,6 +433,34 @@ the new `useStyle` hook add 60–85 ns per render over a hand-computed style obj
 render before the cache was rebuilt as a tree keyed by prop values and breakpoints moved to the
 Provider). The rule for this package: a warm render is a lookup, never style work.
 
+**Where native code could and could not help (2026-10-01).** Asked whether a native module, a Rust
+sidecar or a JSI component would cut the overhead further. Per render, no: the steady-state cost is
+a ~50 ns lookup plus the one props copy any wrapper makes, against roughly 0.6 µs of React's own work
+per component. A call into native code pays for converting its arguments, and reading a props object
+from C++ is one crossing per property, which is more work than the Map lookups it would replace;
+Rust would sit behind the same C++ JSI layer. The old asynchronous bridge would be far worse.
+
+Where time and battery do go, in order of what to do about them:
+
+1. **Bursts when the window or theme changes.** Done, JS only: theme and window are separate
+   contexts, and a component reads the window only when its styles can depend on it (breakpoints in
+   its definitions or `css` prop, or a per-breakpoint prop), via React 19's conditional `use`. A
+   rotation re-renders only responsive components. `packages/native/tests/rerender.ts` counts it.
+2. **The wrapper component itself.** `styled()` adds one component to the tree. A build-time
+   compiler (a Babel plugin, the approach Tamagui's optimizer takes) could rewrite
+   `<Card size="large" />` with literal props into `<View style={hoisted} />`, removing the wrapper
+   and the lookup for static usages and keeping the runtime for dynamic ones. Theme switching then
+   needs either a per-theme hoisted style read through a context, or platform colors (below). This
+   is the biggest remaining steady-state win; it adds `@babel/core` as a dependency of a new package,
+   which needs a decision.
+3. **Theme switches without any re-render.** iOS `DynamicColorIOS` and Android `PlatformColor`
+   resolve colors natively per appearance. Color tokens resolved to those would make a light/dark
+   switch cost no JS at all. Platform-specific, colors only, and Android needs color resources.
+4. **Native shadow-tree updates** (what react-native-unistyles 3 does in C++): restyle mounted views
+   on theme or breakpoint changes without React. Requires the New Architecture, a C++ module and
+   native builds, so it would be a separate package; only worth it if (1) and (3) leave measurable
+   bursts on a device.
+
 Still open, as listed above: native `utils`, RN property names in the types, and `withConfig`
 (`shouldForwardStitchesProp`) for variants that share a name with a component prop.
 
