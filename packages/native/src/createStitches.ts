@@ -4,6 +4,7 @@ import { defaultNativeThemeMap } from './defaultNativeThemeMap.ts'
 import { toThemeValues } from './toThemeValues.ts'
 import { toComposer, render, type Composer } from './createComposer.ts'
 import { toMediaContext, toMediaTests, type MediaContext } from './mediaContext.ts'
+import { toDynamicTheme, type DynamicThemeOptions, type ToDynamicColor } from './dynamicTheme.ts'
 
 /** What `css()` returns: call it with variant props to get a React Native style object. */
 export interface StyleFunction<Variants> {
@@ -28,6 +29,12 @@ export interface Stitches<Media extends string = never> {
 	readonly theme: ThemeValues
 	/** Resolves another theme over the default one, for a dark mode or a brand. */
 	readonly createTheme: (definition: ThemeDefinition) => ThemeValues
+	/**
+	 * One theme for both appearances, its colors switched by the platform: on iOS,
+	 * `dynamicTheme(dark, DynamicColorIOS)` for the Provider, and a light/dark switch then costs no
+	 * render. Throws if anything but a color differs between the two. See dynamicTheme.ts.
+	 */
+	readonly dynamicTheme: (dark: ThemeValues, toDynamicColor: ToDynamicColor, options?: DynamicThemeOptions) => ThemeValues
 	readonly themeMap: { readonly [property: string]: string }
 	readonly config: NativeConfig
 }
@@ -223,6 +230,7 @@ export const createStitches = <const Config extends NativeConfig = NativeConfig>
 		css: <const Arguments extends readonly CssArgument[]>(...args: Arguments): StyleFunction<VariantsOf<Arguments, MediaOf<Config>>> => engine.toStyleFunction(args),
 		theme: engine.theme,
 		createTheme: engine.createTheme,
+		dynamicTheme: (dark, toDynamicColor, options = {}) => toDynamicTheme(options.light ?? engine.theme, dark, toDynamicColor, options.scales),
 		themeMap: engine.themeMap,
 		config: engine.config,
 	}

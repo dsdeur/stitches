@@ -1,10 +1,16 @@
 /**
+ * A value the platform resolves itself, such as what iOS's `DynamicColorIOS` returns: a color that
+ * follows the system appearance with no JavaScript involved. Opaque to stitches, passed through.
+ */
+export type PlatformValue = object
+
+/**
  * The style surface is deliberately structural for now: a property name maps to whatever React
  * Native accepts there, including the objects and arrays it takes for `shadowOffset` and
  * `transform`. Naming every RN property exactly, the way the web packages hand-write their CSS
  * types, is worth doing and is its own piece of work; see roadmap 5.3.
  */
-export type StyleValue = string | number | boolean | null | undefined | readonly unknown[] | { readonly [key: string]: unknown }
+export type StyleValue = string | number | boolean | null | undefined | readonly unknown[] | { readonly [key: string]: unknown } | PlatformValue
 
 /** A style object as written: values may be `$token` strings. */
 export type StyleObject = { readonly [property: string]: StyleValue }
@@ -14,8 +20,10 @@ export type NativeStyle = { [property: string]: StyleValue }
 
 export type ThemeDefinition = { readonly [scale: string]: { readonly [token: string]: string | number } }
 
+export type ThemeValue = string | number | PlatformValue
+
 /** A theme with every token resolved to a value. */
-export type ThemeValues = { readonly [scale: string]: { readonly [token: string]: string | number } }
+export type ThemeValues = { readonly [scale: string]: { readonly [token: string]: ThemeValue } }
 
 export type VariantDefinition = { readonly [variant: string]: { readonly [value: string]: StyleObject } }
 
