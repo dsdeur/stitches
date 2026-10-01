@@ -78,6 +78,18 @@ describe('utility classes', () => {
 		)
 	})
 
+	test('a token name that is not an identifier is escaped in the selector, not in the class', () => {
+		const stitches = createStitches({ ...config, theme: { space: { '0.5': '2px', '1/2': '50%' } }, root: null })
+
+		expect(utilityClasses(stitches, { properties: ['padding'], responsive: false }).map(({ className }) => className)).toEqual(['padding-0.5', 'padding-1/2'])
+
+		// The value names the variable exactly as the theme writes it. (Core writes `--space-0.5`
+		// unescaped, which is not a valid custom property name; that is core's to fix, and utilities
+		// must keep pointing at whatever the theme declares.)
+		expect(stitches.getCssText()).toContain('--space-0.5:2px')
+		expect(utilityCss(stitches, { properties: ['padding'], responsive: false })).toBe('.padding-0\\.5{padding:var(--space-0.5)}.padding-1\\/2{padding:var(--space-1/2)}')
+	})
+
 	test('every property in the default themeMap by default', () => {
 		const stitches = createStitches({ ...config, root: null })
 		const properties = new Set(utilityClasses(stitches, { responsive: false }).map(({ property }) => property))
