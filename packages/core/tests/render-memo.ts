@@ -31,7 +31,7 @@ describe('render memo', () => {
 
 	test('a plain value that reads like a responsive one is a different selection', () => {
 		const { css } = createStitches(config)
-		const component = css({ variants: { mode: { '{"@md":"a"}': { opacity: 0.5 }, a: { opacity: 1 } } } })
+		const component = css({ variants: { mode: { '{"@md":"a"}': { opacity: 0.5 }, 'a': { opacity: 1 } } } })
 
 		const responsive = component({ mode: { '@md': 'a' } }).className
 		const plain = component({ mode: '{"@md":"a"}' }).className
