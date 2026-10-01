@@ -1,0 +1,43 @@
+name: Release
+# Publishes every public package to GitHub Packages as @dsdeur/stitches-<name> when a v<version>
+# tag is pushed. The tag must match every package's version (.task/publish.js checks), and the full
+# CI check set runs first, so a tag on a red commit publishes nothing.
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+  packages: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+          registry-url: https://npm.pkg.github.com
+          scope: '@dsdeur'
+      - name: Install modules
+        run: yarn install --frozen-lockfile
+      - name: Check the tag matches every package version
+        run: node -e "import('./.task/publish.js').then(({ publicPackages, versionMismatches }) => { const bad = versionMismatches(process.env.GITHUB_REF_NAME, publicPackages()); if (bad.length) { console.error('tag does not match: ' + bad.join(', ')); process.exit(1) } })"
+      - name: Typecheck
+        run: yarn typecheck
+      - name: Run tests
+        run: yarn test
+      - name: Run tests with the declared cascade forced on
+        run: yarn test:declared
+      - name: Build
+        run: yarn build
+      - name: Lint
+        run: yarn lint
+      - name: Install Chromium
+        run: yarn playwright install --with-deps chromium
+      - name: Run the browser check
+        run: yarn test:browser
+      - name: Publish
+        run: node .task/publish.js "$GITHUB_REF_NAME"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

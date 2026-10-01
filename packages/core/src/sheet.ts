@@ -113,6 +113,7 @@ export const createSheet = (root: (DocumentOrShadowRoot & Node) | null, { names,
 		names,
 		imports: [],
 		rules: {},
+		generation: 0,
 		reset: null as never, // overwritten below
 		toString: null as never, // overwritten below
 	}
@@ -121,6 +122,8 @@ export const createSheet = (root: (DocumentOrShadowRoot & Node) | null, { names,
 
 	const reset = (): void => {
 		const { rules, sheet } = groupSheet
+
+		++groupSheet.generation
 
 		if (sheet && !sheet.deleteRule) {
 			// SSR mock path — cssRules has splice
