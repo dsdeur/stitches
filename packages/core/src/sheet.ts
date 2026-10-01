@@ -1,4 +1,4 @@
-import type { SheetGroup, RuleGroup, SheetRule, GroupRule, InjectionDeferrer, Cascade, RuleKind } from './types.ts'
+import type { SheetGroup, RuleGroup, SheetRule, GroupRule, InjectionDeferrer, Cascade, RuleKind, SheetLayout } from './types.ts'
 import { getNonce } from './utility/getNonce.ts'
 
 /**
@@ -31,6 +31,17 @@ export const maxDepth = 7
  */
 export const declaredNames: readonly string[] = ['themed', 'global', ...Array.from({ length: maxDepth + 1 }, (_, depth) => declaredDepthGroups.map((group) => `${group}${depth}`)).flat(), 'inline']
 
+/**
+ * Atomic output (`atomic: true`). Themes and globals first, then one group per breakpoint bucket:
+ * unconditional declarations, then one per `config.media` entry in its order, then everything under
+ * another condition (a raw query, `@supports`). Within a group, rules are inserted by a key that puts
+ * shorthands before longhands and pseudo-classes in a fixed order; see features/atomic.ts.
+ */
+export const toAtomicNames = (mediaCount: number): readonly string[] => ['themed', 'global', ...Array.from({ length: mediaCount + 2 }, (_, bucket) => `atomic${bucket}`)]
+
+export const legacyLayout: SheetLayout = { names: legacyNames, keyed: false }
+export const declaredLayout: SheetLayout = { names: declaredNames, keyed: true }
+
 /** Returns the name of the group a rule of the given kind and composition depth belongs to. */
 export const getGroupName = (cascade: Cascade, kind: RuleKind, depth: number): string => (cascade === 'declared' && depthKinds.includes(kind) ? `${declaredGroupOfKind[kind]}${Math.min(depth, maxDepth)}` : kind)
 
@@ -46,8 +57,8 @@ const isSheetAccessible = (sheet: CSSStyleSheet): boolean => {
 	}
 }
 
-/** Serializes the hydration marker for a group: its cache, plus the rule sort keys in the declared cascade. */
-const toMarker = (group: RuleGroup, cascade: Cascade): string => `--sxs{--sxs:${[...group.cache].join(' ')}${cascade === 'declared' && group.keys.length ? `;--sxsk:${group.keys.join(' ')}` : ''}}`
+/** Serializes the hydration marker for a group: its cache, plus the rule sort keys when rules are inserted by key. */
+const toMarker = (group: RuleGroup, keyed: boolean): string => `--sxs{--sxs:${[...group.cache].join(' ')}${keyed && group.keys.length ? `;--sxsk:${group.keys.join(' ')}` : ''}}`
 
 /**
  * Serializes the sheet from the css text that was applied to it, never by reading the CSSOM back.
@@ -65,7 +76,7 @@ const getToString = (groupSheet: SheetGroup): (() => string) => {
 			if (!group) continue
 
 			if (group.texts.length) {
-				cssText += `${toMarker(group, groupSheet.cascade)}@media{${group.texts.join('')}}`
+				cssText += `${toMarker(group, groupSheet.keyed)}@media{${group.texts.join('')}}`
 				continue
 			}
 
@@ -77,9 +88,9 @@ const getToString = (groupSheet: SheetGroup): (() => string) => {
 	}
 }
 
-/** Parses a hydration marker's cache entries and, in the declared cascade, its rule sort keys. */
-const parseMarker = (cssText: string, cascade: Cascade): { cache: string[]; keys: number[] } => {
-	if (cascade === 'legacy') {
+/** Parses a hydration marker's cache entries and, when rules are inserted by key, their sort keys. */
+const parseMarker = (cssText: string, keyed: boolean): { cache: string[]; keys: number[] } => {
+	if (!keyed) {
 		// unchanged 1.x parsing of the browser serialization `--sxs { --sxs: ...; }`
 		return { cache: cssText.slice(14, -3).trim().split(/\s+/), keys: [] }
 	}
@@ -93,14 +104,12 @@ const parseMarker = (cssText: string, cascade: Cascade): { cache: string[]; keys
 	}
 }
 
-export const createSheet = (root: (DocumentOrShadowRoot & Node) | null, cascade: Cascade): SheetGroup => {
-	const names = cascade === 'declared' ? declaredNames : legacyNames
-
+export const createSheet = (root: (DocumentOrShadowRoot & Node) | null, { names, keyed }: SheetLayout): SheetGroup => {
 	// groupSheet is initialized by reset() before createSheet returns.
 	// We create the object upfront with a placeholder sheet, then reset() fills it in properly.
 	const groupSheet: SheetGroup = {
 		sheet: null as never, // overwritten by reset() below before any external access
-		cascade,
+		keyed,
 		names,
 		imports: [],
 		rules: {},
@@ -151,7 +160,7 @@ export const createSheet = (root: (DocumentOrShadowRoot & Node) | null, cascade:
 
 				if (!cssText.startsWith('--sxs')) continue
 
-				const { cache, keys } = parseMarker(cssText, cascade)
+				const { cache, keys } = parseMarker(cssText, keyed)
 
 				const groupName = names[Number(cache[0])]
 
@@ -229,7 +238,7 @@ export const createSheet = (root: (DocumentOrShadowRoot & Node) | null, cascade:
 				currentSheet.insertRule(`--sxs{--sxs:${i}}`, index)
 				currentRules[name] = { group: currentSheet.cssRules[index + 1] as unknown as GroupRule, index, cache: new Set([i]), keys: [], texts: [], apply: noop }
 			}
-			addApplyToGroup(currentRules[name], cascade)
+			addApplyToGroup(currentRules[name], keyed)
 		}
 	}
 
@@ -245,10 +254,10 @@ const noop = () => undefined
 /** Document nodes have nodeType 9; this avoids referencing the `Document` global, which does not exist outside browsers. */
 const isDocument = (node: DocumentOrShadowRoot & Node): node is Document => node.nodeType === 9
 
-const addApplyToGroup = (group: RuleGroup, cascade: Cascade): void => {
+const addApplyToGroup = (group: RuleGroup, keyed: boolean): void => {
 	const groupingRule = group.group
 
-	if (cascade === 'legacy') {
+	if (!keyed) {
 		let index = groupingRule.cssRules.length
 
 		group.apply = (cssText: string): void => {
@@ -264,7 +273,7 @@ const addApplyToGroup = (group: RuleGroup, cascade: Cascade): void => {
 		return
 	}
 
-	// Declared cascade: insert after the last rule whose key is <= the new key, so equal keys keep
+	// Keyed (declared cascade, atomic output): insert after the last rule whose key is <= the new key, so equal keys keep
 	// their insertion order and a rule declared earlier always precedes one declared later.
 	const { keys } = group
 

@@ -1,11 +1,11 @@
+// @vitest-environment jsdom
 import * as react from 'react'
-import * as renderer from 'react-test-renderer'
+import { render } from './helpers/render.ts'
 import { createStitches } from '../src/index.ts'
 
 describe('React', () => {
-	const sheet = createStitches()
+	const sheet = createStitches({ root: null })
 
-	const wrapper = renderer.create(react.createElement(react.Fragment))
 	const Button = sheet.styled('button', {
 		'backgroundColor': 'gainsboro',
 		'borderRadius': '9999px',
@@ -31,17 +31,9 @@ describe('React', () => {
 	test('component renders', () => {
 		if (Button === null) return
 
-		renderer.act(() => {
-			wrapper.update(react.createElement(Button))
-		})
+		const { container } = render(react.createElement(Button))
 
-		expect(wrapper.toJSON()).toEqual({
-			type: 'button',
-			props: {
-				className: 'c-iSEgvG',
-			},
-			children: null,
-		})
+		expect(container.innerHTML).toBe('<button class="c-iSEgvG"></button>')
 
 		expect(sheet.toString()).toEqual(
 			`--sxs{--sxs:2 c-iSEgvG}@media{` +
