@@ -1,8 +1,9 @@
 // The native package must not be reachable from the web packages, and must not drag anything
-// into a native bundle either. Both directions are checked from the source, so this holds
-// whether or not anything has been built.
+// into a native bundle either: the main entry imports nothing, and the react entry imports react
+// and nothing else. Both directions are checked from the source, so this holds whether or not
+// anything has been built.
 import { readdirSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 
 const packages = new URL('../../', import.meta.url).pathname
 
@@ -42,23 +43,46 @@ describe('the native package stays out of the web packages', () => {
 		expect(offenders).toEqual([])
 	})
 
-	test('it has no runtime import of its own, so a native bundle gets only this code', () => {
-		const runtime = []
+	test('only the react entry imports anything outside the package, and that is react alone', () => {
+		const source = join(packages, 'native', 'src')
+		const reactEntry = join(source, 'react')
+		const outside = []
 
-		for (const path of sourceFiles(join(packages, 'native', 'src'))) {
+		for (const path of sourceFiles(source)) {
 			for (const { specifier, typeOnly } of imports(path)) {
-				if (!typeOnly && !specifier.startsWith('./')) runtime.push(`${path}: ${specifier}`)
+				if (typeOnly) continue
+
+				if (specifier.startsWith('.')) {
+					// relative imports must stay inside the package's own source
+					if (!join(dirname(path), specifier).startsWith(source)) outside.push(`${path}: ${specifier}`)
+				} else if (!(specifier === 'react' && path.startsWith(reactEntry))) outside.push(`${path}: ${specifier}`)
 			}
 		}
 
-		expect(runtime).toEqual([])
+		expect(outside).toEqual([])
 	})
 
-	test('and declares no dependencies', () => {
+	test('the React-free entry never reaches the react entry, so it stays usable without React', () => {
+		const source = join(packages, 'native', 'src')
+		const reactEntry = join(source, 'react')
+		const offenders = []
+
+		for (const path of sourceFiles(source)) {
+			if (path.startsWith(reactEntry)) continue
+
+			for (const { specifier } of imports(path)) {
+				if (join(dirname(path), specifier).startsWith(reactEntry)) offenders.push(`${path}: ${specifier}`)
+			}
+		}
+
+		expect(offenders).toEqual([])
+	})
+
+	test('and declares react as its only dependency, an optional peer', () => {
 		const manifest = JSON.parse(readFileSync(join(packages, 'native', 'package.json'), 'utf8'))
 
-		const declared = ['dependencies', 'peerDependencies', 'optionalDependencies'].filter((field) => field in manifest)
-
-		expect(declared).toEqual([])
+		expect(['dependencies', 'optionalDependencies'].filter((field) => field in manifest)).toEqual([])
+		expect(Object.keys(manifest.peerDependencies)).toEqual(['react'])
+		expect(manifest.peerDependenciesMeta).toEqual({ react: { optional: true } })
 	})
 })

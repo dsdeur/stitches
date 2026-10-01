@@ -16,6 +16,16 @@
         "types": "./dist/index.d.cts",
         "default": "./dist/index.cjs"
       }
+    },
+    "./react": {
+      "import": {
+        "types": "./dist/react.d.mts",
+        "default": "./dist/react.mjs"
+      },
+      "require": {
+        "types": "./dist/react.d.cts",
+        "default": "./dist/react.cjs"
+      }
     }
   },
   "files": [
@@ -25,6 +35,14 @@
     "dist/*.d.mts",
     "dist/*.d.cts"
   ],
+  "peerDependencies": {
+    "react": ">=16.8"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
   "sideEffects": false,
   "license": "MIT",
   "repository": "dsdeur/stitches",
@@ -35,6 +53,7 @@
     "css-in-js",
     "design tokens",
     "react native",
+    "responsive",
     "stitches",
     "styled",
     "theme",
