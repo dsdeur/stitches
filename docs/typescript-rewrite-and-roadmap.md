@@ -446,13 +446,16 @@ Where time and battery do go, in order of what to do about them:
    contexts, and a component reads the window only when its styles can depend on it (breakpoints in
    its definitions or `css` prop, or a per-breakpoint prop), via React 19's conditional `use`. A
    rotation re-renders only responsive components. `packages/native/tests/rerender.ts` counts it.
-2. **The wrapper component itself.** `styled()` adds one component to the tree. A build-time
-   compiler (a Babel plugin, the approach Tamagui's optimizer takes) could rewrite
-   `<Card size="large" />` with literal props into `<View style={hoisted} />`, removing the wrapper
-   and the lookup for static usages and keeping the runtime for dynamic ones. Theme switching then
-   needs either a per-theme hoisted style read through a context, or platform colors (below). This
-   is the biggest remaining steady-state win; it adds `@babel/core` as a dependency of a new package,
-   which needs a decision.
+2. **The wrapper component itself.** Done 2026-10-01, opt in: `@stitches/native-babel` compiles
+   `<Card size="large" />` into `styledElement(Card, …, environment)` and one
+   `useStitchesEnvironment()` hook per component, so the wrapper disappears and only the cached
+   lookup remains (+4% over hand-computed styles, against +15% for `styled()`). It needs no build-time
+   evaluation, so it handles dynamic props too. Two correctness constraints shaped it: a compiled
+   element reads the theme where it is created, so only elements that mount in the same theme are
+   compiled (never one passed into another component); and React Compiler memoizes element creation,
+   so the theme is read by a real hook and passed in, never read inside the helper. Hoisting literal
+   usages to module constants (Tamagui's approach) would remove the lookup too, but needs the config
+   evaluated at build time; not done.
 3. **Theme switches without any re-render.** Done for iOS 2026-10-01: `dynamicTheme(dark,
    DynamicColorIOS)` turns every color token that differs into a `DynamicColorIOS` color, so the
    Provider's theme never changes and a light/dark switch renders nothing. It throws, naming the

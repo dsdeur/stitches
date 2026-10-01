@@ -110,3 +110,6 @@ dist
 
 # IntelliJ
 .idea/
+
+# compiled fixtures written by tests
+.generated

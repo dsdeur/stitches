@@ -9,5 +9,12 @@ export default defineConfig({
 		include: ['packages/*/tests/**/*.{ts,js}'],
 		// tests/helpers holds shared test code, not tests.
 		exclude: ['**/*.type-test.ts', '**/*.d.ts', '**/node_modules/**', '**/declared-run/**', '**/tests/helpers/**'],
+		// `yarn test:coverage`: what the suite executes of each package's source. Reported, not gated.
+		coverage: {
+			provider: 'v8',
+			include: ['packages/*/src/**/*.ts'],
+			reporter: ['text-summary', 'text', 'html'],
+			reportsDirectory: 'coverage',
+		},
 	},
 })

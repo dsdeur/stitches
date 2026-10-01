@@ -64,4 +64,22 @@ const staticPackage: UserConfig = {
 	outExtensions: ({ format }) => ({ js: format === 'cjs' ? '.cjs' : '.mjs' }),
 }
 
-export default defineConfig([pkg('stringify'), pkg('core'), pkg('react'), native, staticPackage])
+/**
+ * The Babel plugin runs inside Metro's Babel, in Node, and Babel loads plugins with require(), so the
+ * CommonJS build is the one that matters. Written in plain JS; its public types are hand-written.
+ */
+const nativeBabel: UserConfig = {
+	entry: { index: 'packages/native-babel/src/index.js' },
+	outDir: 'packages/native-babel/dist',
+	format: ['esm', 'cjs'],
+	platform: 'node',
+	target: 'es2020',
+	minify: true,
+	sourcemap: true,
+	dts: false,
+	clean: true,
+	hash: false,
+	outExtensions: ({ format }) => ({ js: format === 'cjs' ? '.cjs' : '.mjs' }),
+}
+
+export default defineConfig([pkg('stringify'), pkg('core'), pkg('react'), native, staticPackage, nativeBabel])
