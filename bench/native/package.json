@@ -1,0 +1,19 @@
+{
+  "name": "stitches-native-bench",
+  "private": true,
+  "version": "0.0.0",
+  "main": "index.js",
+  "description": "Measures what @stitches/native costs in a real React Native app, against no styling and StyleSheet. Not part of the workspaces; see README.md.",
+  "scripts": {
+    "bench": "node run.mjs"
+  },
+  "dependencies": {
+    "@stitches/native": "file:./.stitches/native",
+    "expo": "~54.0.37",
+    "react": "19.1.0",
+    "react-native": "0.81.5"
+  },
+  "devDependencies": {
+    "@stitches/native-babel": "file:./.stitches/native-babel"
+  }
+}
