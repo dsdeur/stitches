@@ -456,9 +456,11 @@ Where time and battery do go, in order of what to do about them:
    so the theme is read by a real hook and passed in, never read inside the helper. Hoisting literal
    usages to module constants (Tamagui's approach) would remove the lookup too, but needs the config
    evaluated at build time; not done.
-3. **Theme switches without any re-render.** iOS `DynamicColorIOS` and Android `PlatformColor`
-   resolve colors natively per appearance. Color tokens resolved to those would make a light/dark
-   switch cost no JS at all. Platform-specific, colors only, and Android needs color resources.
+3. **Theme switches without any re-render.** Done for iOS 2026-10-01: `dynamicTheme(dark,
+   DynamicColorIOS)` turns every color token that differs into a `DynamicColorIOS` color, so the
+   Provider's theme never changes and a light/dark switch renders nothing. It throws, naming the
+   token, when anything but a color differs, rather than using the light value in dark mode. Android
+   stays on Provider switching: `PlatformColor` needs native color resources.
 4. **Native shadow-tree updates** (what react-native-unistyles 3 does in C++): restyle mounted views
    on theme or breakpoint changes without React. Requires the New Architecture, a C++ module and
    native builds, so it would be a separate package; only worth it if (1) and (3) leave measurable

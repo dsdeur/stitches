@@ -8,3 +8,5 @@ export type { CssArgument, MediaOf, Stitches, StyleFunction } from './createStit
 export type { Viewport } from './media.ts'
 export type { ComposerDefinition, CompoundVariant, NativeConfig, NativeStyle, ResponsiveValue, StyleObject, StyleValue, ThemeDefinition, ThemeValues, VariantDefinition, VariantSelection, VariantsOf } from './types.ts'
 export type { NativeTokensOf, NativeValue, ThemeTokenLike } from './toNativeTokens.ts'
+export type { DynamicThemeOptions, ToDynamicColor } from './dynamicTheme.ts'
+export type { PlatformValue, ThemeValue } from './types.ts'

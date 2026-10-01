@@ -133,6 +133,36 @@ The percentages are against server rendering, which is far cheaper per element t
 Native host view, so on a device the share is smaller; the absolute cost is the number to watch.
 For a long list, `useStyle` adds no component to the tree at all.
 
+## Light and dark without a render (iOS)
+
+Switching themes through the `Provider` re-renders everything that resolves tokens. On iOS the
+platform can do it instead: `DynamicColorIOS({ light, dark })` is a color iOS resolves for the
+current appearance itself. `dynamicTheme` builds one theme for both appearances out of those:
+
+```tsx
+import { DynamicColorIOS, Platform, useColorScheme } from 'react-native'
+
+const dark = createTheme({ colors: { background: '#0c0c11', text: 'white' } })
+const both = Platform.OS === 'ios' ? dynamicTheme(dark, DynamicColorIOS) : undefined
+
+export const App = () => {
+  const scheme = useColorScheme()
+  // iOS: one theme, never changes, so a light/dark switch renders nothing.
+  // Android: switch themes through the Provider as before.
+  return <Provider theme={both ?? (scheme === 'dark' ? dark : theme)}>{/* … */}</Provider>
+}
+```
+
+- Every color token that differs between the two becomes a dynamic color; equal ones stay plain.
+  A token used as a whole value (`color: '$text'`) reaches the style as that color object.
+- **Only colors can switch this way.** If anything else differs between light and dark (a spacing,
+  or a shadow string that embeds a color), `dynamicTheme` throws and names it, rather than quietly
+  using the light value in dark mode. A dynamic color inside a longer string (`'0 1px $colors$text'`)
+  cannot be expressed either and is left as a visible reference.
+- `{ scales: ['colors', 'brand'] }` names other color scales; `{ light }` uses another light theme.
+- Android has no JavaScript-only equivalent (`PlatformColor` reads native color resources), so it
+  keeps switching through the `Provider`.
+
 ## Responsive values
 
 The web config's `media` works here, read against the viewport instead of by a browser:

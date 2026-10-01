@@ -2,6 +2,7 @@ import * as React from 'react'
 import type { NativeConfig, NativeStyle, StyleObject, ThemeValues, VariantsOf } from '../types.ts'
 import type { Viewport } from '../media.ts'
 import type { MediaContext } from '../mediaContext.ts'
+import { toDynamicTheme } from '../dynamicTheme.ts'
 import { createStyleEngine, hasBreakpoint, type CssArgument, type MediaOf, type PropsRecord, type Resolver, type Stitches, type StyleFunction } from '../createStitches.ts'
 
 /**
@@ -229,6 +230,7 @@ export const createStitches = <const Config extends NativeConfig = NativeConfig>
 		css: <const Arguments extends readonly CssArgument[]>(...args: Arguments): StyleFunction<VariantsOf<Arguments, MediaOf<Config>>> => engine.toStyleFunction(args),
 		theme: engine.theme,
 		createTheme: engine.createTheme,
+		dynamicTheme: (dark, toDynamicColor, options = {}) => toDynamicTheme(options.light ?? engine.theme, dark, toDynamicColor, options.scales),
 		themeMap: engine.themeMap,
 		config: engine.config,
 		styled,

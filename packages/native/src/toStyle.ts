@@ -1,10 +1,13 @@
-import type { NativeStyle, StyleObject, ThemeValues } from './types.ts'
+import type { NativeStyle, StyleObject, StyleValue, ThemeValues } from './types.ts'
 import type { MediaContext } from './mediaContext.ts'
 import { toNativeValue } from './values.ts'
 import { coveredBy } from './shorthands.ts'
 
 /** `$token` or `$scale$token`, the same spelling the web config uses. */
 const reference = /\$(?:([\w-]+)\$)?([\w-]+)/g
+
+/** A value that is exactly one reference. */
+const wholeReference = /^\$(?:([\w-]+)\$)?([\w-]+)$/
 
 const structural = new Set(['variants', 'compoundVariants', 'defaultVariants'])
 
@@ -21,17 +24,30 @@ const isStyleObject = (value: unknown): value is StyleObject => typeof value ===
  * for; an explicit `$scale$token` always resolves. A reference with no scale to resolve against,
  * or one the theme does not define, is left as written rather than guessed at.
  */
-const toValue = (property: string, value: string, context: StyleContext): string | number => {
+const toValue = (property: string, value: string, context: StyleContext): StyleValue => {
 	const scaleForProperty = context.themeMap[property]
 
-	const resolved = value.replace(reference, (whole: string, explicitScale: string | undefined, tokenName: string): string => {
+	const tokenOf = (explicitScale: string | undefined, tokenName: string) => {
 		const scaleName = explicitScale ?? scaleForProperty
 
-		if (scaleName === undefined) return whole
+		return scaleName === undefined ? undefined : context.theme[scaleName]?.[tokenName]
+	}
 
-		const token = context.theme[scaleName]?.[tokenName]
+	// A value that is one reference and nothing else takes the token as it is, which is how a platform
+	// value (a dynamic color) reaches the style untouched.
+	const whole = wholeReference.exec(value)
 
-		return token === undefined ? whole : String(token)
+	if (whole) {
+		const token = tokenOf(whole[1], whole[2])
+
+		if (typeof token === 'object') return token
+	}
+
+	const resolved = value.replace(reference, (match: string, explicitScale: string | undefined, tokenName: string): string => {
+		const token = tokenOf(explicitScale, tokenName)
+
+		// A platform value cannot be written into a string; leaving the reference makes that visible.
+		return token === undefined || typeof token === 'object' ? match : String(token)
 	})
 
 	return toNativeValue(resolved)
