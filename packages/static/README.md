@@ -44,6 +44,12 @@ injected, and renders from there: a component whose rules are all in the file ch
 stylesheet. Nothing in `@stitches/core` or `@stitches/react` changes for this, and nothing about
 how you use them either.
 
+In atomic output the file holds every declaration of every style object, plainly and at each
+breakpoint, so a declaration that loses in every combination the extractor renders is still there.
+The one thing it cannot hold ahead of time is a longhand restated under an earlier breakpoint
+shorthand, which exists only for one combination across composition depths; that rule is written
+at runtime, and its declaration is already in the file.
+
 Anything the file does not hold is injected at runtime, exactly as today, into the right position
 of the same sheet:
 

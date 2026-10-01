@@ -105,3 +105,31 @@ warm call (breakpoints evaluated once per window size instead of per call, and a
 prop values instead of a JSON string), and `styled` from +219% over hand-computed styles (about
 1.3 µs per card) to +10–15% (60–85 ns per card). `useStyle` costs the same as `styled` and adds no
 component to the tree. Run-to-run noise is a few percent; compare medians of several runs.
+
+## Randomized differential checks
+
+`browser-differential.mts` (part of `yarn test:browser`) generates random compositions and props
+from a seed (`packages/core/tests/helpers/random-styles.ts`) and resolves each case three ways:
+Chromium's computed styles under `cascade: 'declared'`, the same under `atomic: true` rendered in
+reverse order, and `@stitches/native`'s style objects read the way React Native resolves them.
+All three must agree on every compared property. `SEED=<n> COUNT=<components> SHOW=<diffs>` reruns
+one seed at any size; a failure prints the seed, the composition and the props.
+
+`packages/static/tests/extract-random.js` (part of `yarn test`) does the same for static
+extraction: random compositions are extracted, a client hydrates from the file, and random props
+within what the extractor covers must inject nothing (in atomic output, only a longhand restated
+under a breakpoint shorthand, whose declaration is already in the file).
+
+First runs, 2026-10-01, found four real bugs that the hand-written tests had not:
+
+- web: a compound variant whose condition matched at `@initial` and again at a breakpoint was
+  wrapped in that breakpoint, so it applied only there;
+- native: a shorthand declared after a longhand did not win (React Native lets the specific
+  property win regardless of order), and values an extension adds to an inherited variant were
+  ordered at the extension's depth instead of the variant's;
+- static: compound conditions given with a non-default `@initial`, and declarations that lose in
+  every extracted combination in atomic output, were not in the file.
+
+Generated styles each carry a unique `--u` custom property, so two random components never share a
+class by coincidence: in the declared cascade a style object shared at two depths applies at the
+deeper one (roadmap 11.2), which is documented behavior these checks are not about.
