@@ -28,7 +28,8 @@ objects, arrays or single values, down to four levels deep, and writes:
   every variant, and every compound variant. An extension (`styled(Button, { … })`) brings the
   rules of what it extends.
 - **Responsive values**: every variant value and every compound variant at each breakpoint in
-  `config.media`, so `size={{ '@bp2': 'large' }}` is in the file. Turn this off with
+  `config.media`, so `size={{ '@bp2': 'large' }}` is in the file. For a compound variant, every mix
+  of its conditions at one breakpoint with the rest plain (`size="lg"` with `outline={{ '@bp2': true }}`). Turn this off with
   `{ responsive: false }` if the file grows too large.
 - **Themes** from `createTheme()`, **global styles** from `globalCss()`, and **keyframes**.
 
