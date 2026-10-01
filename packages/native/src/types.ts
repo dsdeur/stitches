@@ -55,10 +55,19 @@ export type VariantSelection<Definition, Media extends string> = Definition exte
 			? { readonly [Variant in keyof Variants]?: ResponsiveValue<VariantValue<Variants[Variant]>, Media> }
 			: object
 
-type UnionToIntersection<Union> = (Union extends unknown ? (of: Union) => void : never) extends (of: infer Intersection) => void ? Intersection : never
+/** Every key of every member of a union. */
+type KeysOfUnion<Union> = Union extends unknown ? keyof Union : never
 
-/** Every composer in a `css(a, b)` call contributes its variants. */
-export type VariantsOf<Arguments extends readonly unknown[], Media extends string> = UnionToIntersection<VariantSelection<Arguments[number], Media>>
+/** The plain values a key takes in any member of a union, without the per-breakpoint object form. */
+type ValuesOfUnion<Union, Key extends PropertyKey> = Union extends unknown ? (Key extends keyof Union ? Exclude<NonNullable<Union[Key]>, object> : never) : never
+
+/**
+ * Every composer in a `css(a, b)` call contributes its variants. A variant several composers declare
+ * takes the values of all of them: an extension adding `loud` to an inherited `tone` accepts both.
+ */
+export type VariantsOf<Arguments extends readonly unknown[], Media extends string> = {
+	readonly [Variant in KeysOfUnion<VariantSelection<Arguments[number], Media>>]?: ResponsiveValue<ValuesOfUnion<VariantSelection<Arguments[number], Media>, Variant>, Media>
+}
 
 export interface NativeConfig {
 	readonly theme?: ThemeDefinition
