@@ -46,6 +46,16 @@ const shimmed = (actual: unknown) => ({
 	toBeInstanceOf(expected: abstract new (...args: never[]) => unknown) {
 		return original(actual).toBeInstanceOf(expected)
 	},
+	// Containment and length do not depend on rule order, so these pass through unchanged.
+	toContain(expected: unknown) {
+		return original(actual).toContain(expected)
+	},
+	toMatch(expected: string | RegExp) {
+		return original(actual).toMatch(expected)
+	},
+	toHaveLength(expected: number) {
+		return original(actual).toHaveLength(expected)
+	},
 	get not() {
 		return original(actual).not
 	},

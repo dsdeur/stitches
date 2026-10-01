@@ -271,6 +271,36 @@ process-global sheet that accumulates rules across requests.
 
 Packaging: `@stitches/compiler` (or `static`) with a Vite/Next plugin. No core API change.
 
+**Shipped 2026-09-30: `packages/static`.** `extractCss(stitches, sources, { responsive })` walks module
+namespaces or values, renders every component through the instance's own `css()` (so a `styled()`
+component, which cannot be called outside React, produces the same classes and group positions),
+and returns `getCssText()`. Per component it renders the defaults, every variant value, every
+compound variant, and, unless `responsive: false`, each of those at every `config.media` key.
+Themes, `globalCss()` and `keyframes()` results are recognised by shape and rendered. Step 4 above
+needed no new code: the runtime already hydrates from any same-origin stylesheet carrying `--sxs`
+markers, so a `<link>` to the file is enough. `yarn test:browser` checks exactly that, in both
+cascades: after the page loads the file, rendering a variant from it adds no style rule anywhere.
+
+What stays at runtime, and is documented in the package README: `css` props, a value placed at two
+breakpoints at once, a compound whose conditions hold at different breakpoints, components the walk
+does not reach, and every rule when the file is cross-origin (the CSSOM of a cross-origin sheet is
+unreadable). Under `'legacy'` the file's order is the extractor's visiting order, not the pages'
+render order, so the README recommends `'declared'`.
+
+Not built yet, each its own piece: a Vite plugin (load the style modules with `ssrLoadModule`, emit
+the file as an asset), and a strict mode that fails the build when a render would inject at runtime.
+
+**Shipped 2026-10-01: `bundleCss`.** The same extraction as plain css (markers and `@media{}` groups
+removed, rules and order unchanged) followed by the utility classes of 5.2 A, as one file to cache or
+to inline into a single html page with no runtime. `yarn test:browser` checks such a page with one
+`<style>` and no script: component, variant, a utility overriding a component, a breakpoint utility
+and a theme switch all resolve.
+
+Next, recorded 2026-10-01 as the direction for this package: **above-the-fold css.** Given the html
+of a page (or of its first viewport), keep only the rules whose classes appear there, inline those,
+and load the rest of the bundle later. The plain bundle makes this a filter over rules by class
+name; the work is deciding what "above the fold" means for a page, which needs a rendered page.
+
 ### 5.2 Utility class stylesheet (for agents writing HTML)
 
 Goal: a stylesheet with readable utility class names that reuses our tokens and themes, so
@@ -286,6 +316,12 @@ Two designs, both viable:
 - **B. Atomic output mode for the component runtime** (one class per declaration, like
   stylex). Constraint: selector-based targeting (`Comp.selector`, `${Comp} &`, descendant
   selectors that assume one class per component) is unavailable in that mode.
+
+Decision (2026-10-01): **both.** A shipped as part of `@stitches/static` (`utilityClasses`,
+`utilityCss`, and in `bundleCss`): one class per token per `themeMap` property, named after the css
+property (`padding-2`, `background-color-primary`), breakpoints as `tablet:` prefixes and opt-in
+states, valued by the token's custom property so themes switch them. B, the atomic output mode for
+components, is next and separate: it changes how core renders, so it is an opt-in config flag.
 
 Decision note (2026-09-05): the usage constraint in B is acceptable ("components must be
 used a certain way, same as `li` in `ul`"). So B is not ruled out. Open question: which
@@ -465,8 +501,10 @@ list; it now points here. Items marked done stay for context.
    slowness it was meant to fix does not reproduce on TypeScript 6 (see 10.2 and
    `docs/bench/type-perf/`).
 9. Composite border tokens via multi-scale `themeMap` (6.1). Done 2026-09-05.
-10. Static extraction (5.1).
-11. Utility sheet (5.2), after deciding A vs B vs both.
+10. Static extraction (5.1). `@stitches/static` shipped 2026-09-30 as a function a build script calls;
+    a Vite plugin and a strict mode are the follow-ups.
+11. Utility sheet (5.2): both. A shipped 2026-10-01 in `@stitches/static` (`bundleCss`, utilities);
+    B (atomic component output) is next, behind an opt-in flag.
 12. Native adapter (5.3), after settling the shared vocabulary.
 
 ## 9. Open questions
