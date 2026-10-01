@@ -88,12 +88,17 @@ export const App = () => {
 		started.current = true
 
 		const run = async () => {
-			const { implementation } = await (await fetch(`${runner}/config`)).json()
+			const { implementation, profile } = await (await fetch(`${runner}/config`)).json()
 			if (!(implementation in implementations)) throw new Error(`unknown scenario ${implementation}`)
 			const samples = { mount: [], update: [], theme: [] }
 
+			// Hermes' sampling profiler, over the measured rounds only, when the runner asks for a profile
+			const hermes = globalThis.HermesInternal
+			const profiling = Boolean(profile && hermes?.enableSamplingProfiler && hermes.dumpSampledTraceToFile)
+
 			for (let round = 0; round < rounds; round++) {
 				setStatus(`${implementation}: round ${round + 1} of ${rounds}`)
+				if (round === 1 && profiling) hermes.enableSamplingProfiler()
 				const record = (operation, timing) => {
 					if (round > 0) samples[operation].push(timing)
 				}
@@ -104,8 +109,13 @@ export const App = () => {
 				await measure((previous) => ({ ...previous, implementation: null }))
 			}
 
+			if (profiling) {
+				hermes.disableSamplingProfiler()
+				hermes.dumpSampledTraceToFile(profile)
+			}
+
 			setStatus('posting results')
-			await fetch(`${runner}/results`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ implementation, count, samples }) })
+			await fetch(`${runner}/results`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ implementation, count, samples, profiled: profiling ? profile : null, hermes: Object.keys(hermes ?? {}) }) })
 			setStatus('done')
 		}
 

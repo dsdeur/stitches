@@ -5,6 +5,7 @@
 //   SIMULATOR="iPhone 17" node run.mjs          # a specific simulator; the first iPhone otherwise
 //   IOS=26 node run.mjs                         # only simulators of that iOS version
 //   MODES=off node run.mjs                      # only one React Compiler mode
+//   PROFILE=1 node run.mjs                      # one Hermes sampling profile per scenario instead of timings
 //
 // Release, because a Debug build runs development React and unoptimized native code, which would
 // distort every number here. Results land in results/<mode>.json as well.
@@ -88,7 +89,7 @@ const isRunning = (pid) => {
  * Serves one launch: tells the app which scenario to run, then waits for it to post the samples,
  * and stops waiting when the app exits without doing so.
  */
-const serveLaunch = (implementation, timeoutMs) => {
+const serveLaunch = (config, timeoutMs) => {
 	let watchedPid
 	const results = new Promise((resolve, reject) => {
 		const finish = (settle, value) => {
@@ -100,7 +101,7 @@ const serveLaunch = (implementation, timeoutMs) => {
 		const server = createServer((request, response) => {
 			if (request.method === 'GET' && request.url === '/config') {
 				response.setHeader('content-type', 'application/json')
-				response.end(JSON.stringify({ implementation }))
+				response.end(JSON.stringify(config))
 				return
 			}
 			let body = ''
@@ -121,9 +122,9 @@ const serveLaunch = (implementation, timeoutMs) => {
 }
 
 /** Runs one scenario in a fresh process of the installed app and returns its samples. */
-const runScenario = async (device, implementation) => {
+const runScenario = async (device, implementation, profile) => {
 	terminate(device)
-	const { results, watch } = serveLaunch(implementation, 10 * 60 * 1000)
+	const { results, watch } = serveLaunch({ implementation, profile }, 10 * 60 * 1000)
 	// prints "dev.stitches.bench: <pid>"
 	const launched = execFileSync('xcrun', ['simctl', 'launch', device.udid, 'dev.stitches.bench'], { encoding: 'utf8' }).trim()
 	watch(Number(launched.split(': ').pop()))
@@ -193,6 +194,17 @@ for (const mode of modes) {
 	// installed and launched with simctl, which needs no Simulator window: the run works over SSH
 	terminate(device)
 	run('xcrun', ['simctl', 'install', device.udid, app])
+
+	if (process.env.PROFILE) {
+		for (const name of scenarios) {
+			const trace = join(here, 'results', `${mode}-${name}.hermes.json`)
+			rmSync(trace, { force: true })
+			const received = await runScenario(device, name, trace)
+			if (!received.profiled) throw new Error(`no sampling profiler in this Hermes; HermesInternal has: ${received.hermes.join(', ')}`)
+			console.log(`  ${name}: ${existsSync(trace) ? trace : 'the app reported a profile, but no file was written'}`)
+		}
+		continue
+	}
 
 	const samples = Object.fromEntries(scenarios.map((name) => [name, { mount: [], update: [], theme: [] }]))
 	let count
