@@ -45,6 +45,25 @@ const pickSimulator = () => {
 	return device
 }
 
+/**
+ * The Release app for the simulator, built with Apple's tools directly: `expo prebuild` writes the
+ * iOS project and installs its pods, xcodebuild builds it, and the JS bundle is made in the build's
+ * own bundling phase, which sees BENCH_COMPILER from the environment.
+ */
+const buildApp = (device, env) => {
+	run('npx', ['expo', 'prebuild', '--platform', 'ios'], { ...env, CI: '1' })
+
+	const ios = join(here, 'ios')
+	const workspace = readdirSync(ios).find((entry) => entry.endsWith('.xcworkspace'))
+	if (!workspace) throw new Error('expo prebuild wrote no .xcworkspace')
+	const scheme = workspace.replace(/\.xcworkspace$/, '')
+	const derivedData = join(ios, 'build')
+
+	run('xcodebuild', ['-workspace', join(ios, workspace), '-scheme', scheme, '-configuration', 'Release', '-sdk', 'iphonesimulator', '-destination', `id=${device.udid}`, '-derivedDataPath', derivedData, '-quiet', 'build'], env)
+
+	return join(derivedData, 'Build/Products/Release-iphonesimulator', `${scheme}.app`)
+}
+
 /** Waits for the app to post its results. */
 const receiveResults = (timeoutMs) =>
 	new Promise((resolve, reject) => {
@@ -97,9 +116,14 @@ for (const mode of modes) {
 		if (entry.startsWith('metro-') || entry.startsWith('haste-map')) rmSync(join(tmpdir(), entry), { recursive: true, force: true })
 	}
 
-	const results = receiveResults(15 * 60 * 1000)
 	console.log(`\nbuilding with React Compiler ${mode} (Release)…`)
-	run('npx', ['expo', 'run:ios', '--configuration', 'Release', '--device', device.udid, '--no-bundler'], env)
+	const app = buildApp(device, env)
+
+	// installed and launched with simctl, which needs no Simulator window: the run works over SSH
+	const results = receiveResults(15 * 60 * 1000)
+	execFileSync('xcrun', ['simctl', 'terminate', device.udid, 'dev.stitches.bench'], { stdio: 'ignore' })
+	run('xcrun', ['simctl', 'install', device.udid, app])
+	run('xcrun', ['simctl', 'launch', device.udid, 'dev.stitches.bench'])
 
 	const received = await results
 	execFileSync('xcrun', ['simctl', 'terminate', device.udid, 'dev.stitches.bench'], { stdio: 'ignore' })
