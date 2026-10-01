@@ -146,31 +146,69 @@ export const createStyleEngine = (config: NativeConfig): StyleEngine => {
 		// The cache is a tree: theme, then breakpoint signature, then one level per variant keyed by
 		// the prop value itself, so a warm render does a few Map lookups and builds no string.
 		const cache = new WeakMap<ThemeValues, Map<string, CacheNode>>()
-		let lastTheme: ThemeValues | undefined
-		let lastBySignature: Map<string, CacheNode> | undefined
+
+		// The last selection this function resolved: a render that repeats it (the common case, a parent
+		// re-rendering) compares a few values and returns, without walking the cache at all.
+		const variantCount = variantNames.length
+		const lastValues: unknown[] = new Array(variantCount)
+		let lastStyle: NativeStyle | undefined
+		let lastStyleTheme: ThemeValues | undefined
+		let lastStyleMedia: MediaContext | undefined
+
+		// The cache root for the last theme and window, so a new selection skips two lookups.
+		let lastRootTheme: ThemeValues | undefined
+		let lastRootMedia: MediaContext | undefined
+		let lastRoot: CacheNode | undefined
 
 		const resolve: Resolver = (props, activeTheme, media) => {
 			const overrides = props.css
 
 			// An inline override is a new object every render, so caching on it would never hit.
-			if (isStyleObject(overrides)) return render(composers, variantNames, props, activeTheme, themeMap, media, overrides)
+			if (overrides !== undefined && isStyleObject(overrides)) return render(composers, variantNames, props, activeTheme, themeMap, media, overrides)
 
 			// A raw query's result is not part of the breakpoint signature.
 			if (writesRawQueries && media !== initialMedia) return render(composers, variantNames, props, activeTheme, themeMap, media)
 
-			let bySignature = activeTheme === lastTheme ? lastBySignature : cache.get(activeTheme)
+			if (lastStyle !== undefined && activeTheme === lastStyleTheme && media === lastStyleMedia) {
+				let same = true
 
-			if (!bySignature) cache.set(activeTheme, (bySignature = new Map<string, CacheNode>()))
+				for (let index = 0; index < variantCount; index++) {
+					const value = props[variantNames[index]]
 
-			lastTheme = activeTheme
-			lastBySignature = bySignature
+					// a per-breakpoint value is an object, new each render: never the same as last time
+					if (value !== lastValues[index] || (value !== null && typeof value === 'object')) {
+						same = false
+						break
+					}
+				}
 
-			let node = bySignature.get(media.signature)
+				if (same) return lastStyle
+			}
 
-			if (!node) bySignature.set(media.signature, (node = { next: new Map() }))
+			// lastValues is rewritten below, so the fast path is off until a walk completes
+			lastStyle = undefined
 
-			for (const name of variantNames) {
-				const value = props[name]
+			let node: CacheNode | undefined
+
+			if (activeTheme === lastRootTheme && media === lastRootMedia) node = lastRoot
+			else {
+				let bySignature = cache.get(activeTheme)
+
+				if (!bySignature) cache.set(activeTheme, (bySignature = new Map<string, CacheNode>()))
+
+				node = bySignature.get(media.signature)
+
+				if (!node) bySignature.set(media.signature, (node = { next: new Map() }))
+
+				lastRootTheme = activeTheme
+				lastRootMedia = media
+				lastRoot = node
+			}
+
+			if (node === undefined) return render(composers, variantNames, props, activeTheme, themeMap, media)
+
+			for (let index = 0; index < variantCount; index++) {
+				const value = props[variantNames[index]]
 				let key: unknown = value ?? undefined
 
 				if (isRecord(value)) {
@@ -179,14 +217,18 @@ export const createStyleEngine = (config: NativeConfig): StyleEngine => {
 					key = responsiveKey(JSON.stringify(value))
 				}
 
-				let child = node.next.get(key)
+				let child: CacheNode | undefined = node.next.get(key)
 
 				if (!child) node.next.set(key, (child = { next: new Map() }))
 
 				node = child
+				lastValues[index] = value
 			}
 
-			return node.style ?? (node.style = render(composers, variantNames, props, activeTheme, themeMap, media))
+			lastStyleTheme = activeTheme
+			lastStyleMedia = media
+
+			return (lastStyle = node.style ?? (node.style = render(composers, variantNames, props, activeTheme, themeMap, media)))
 		}
 
 		const style = (props: { readonly css?: StyleObject } = Object.create(null), activeTheme: ThemeValues = theme, viewport?: Viewport): NativeStyle => resolve(isRecord(props) ? props : {}, activeTheme, mediaFor(viewport))

@@ -72,6 +72,17 @@ describe('responsive values', () => {
 		expect(box(props, undefined, phone).color).toBe(undefined)
 	})
 
+	test('a call that leaves the cache early does not leave a stale answer for the next one', () => {
+		const wide = { width: 1300, height: 900 }
+		const first = box({ size: 'large', tone: 'brand' }, undefined, wide)
+
+		// a raw query in a prop is resolved without the cache, part way through its walk
+		box({ size: 'small', tone: { '@media (min-width: 1px)': 'quiet' } }, undefined, wide)
+
+		expect(box({ size: 'small', tone: 'brand' }, undefined, wide)).not.toBe(first)
+		expect(box({ size: 'small', tone: 'brand' }, undefined, wide)).toEqual({ padding: 16, fontSize: 12, lineHeight: 16, color: 'blue' })
+	})
+
 	test('alternating between window sizes gives the right style each time', () => {
 		for (const viewport of [phone, desktop, phone, tablet, desktop, tablet]) {
 			const expected = viewport === phone ? 4 : viewport === tablet ? 8 : 16
