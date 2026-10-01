@@ -42,6 +42,9 @@ All four must pass before a PR is opened. CI runs typecheck, test, build, and li
   That manifest is never published: `.task/pack.js` stages the publishable form with exports
   rewritten to `dist`, `yarn lint:pkg` lints that staged form, and the release workflow publishes
   it. Do not point published exports at `src`; react's source reaches core by relative path.
+  Releases go through `.github/workflows/release.yml` on a `v<version>` tag, which publishes that same
+  staged form as `@dsdeur/stitches-<name>` to GitHub Packages (`.task/publish.js`). There is no npm
+  release. Never publish by hand, and never push a release tag unless asked.
 - `packages/native/src` the theme bridge for React Native and anything else that is not CSS.
   It must stay separable: no dependencies, no `react-native` code, no runtime import of its own,
   and no web package may import it. `packages/native/tests/separation.js` enforces both directions

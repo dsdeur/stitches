@@ -17,7 +17,6 @@
     "build:watch": "tsdown --watch",
     "lint": "oxlint && yarn lint:pkg",
     "lint:pkg": "node .task/lint-pkg.js",
-    "release": "node .task/release.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc -p tsconfig.json",
