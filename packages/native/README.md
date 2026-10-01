@@ -111,6 +111,12 @@ that this payment is a lookup, not work:
 - `styled()` reads its variants straight from its props and makes the one copy of the props any
   wrapper makes (to leave the variants out).
 
+- A window size change (rotation, split screen, a resized tablet window) re-renders only the
+  components whose styles can depend on it: a breakpoint block in their definitions or `css` prop,
+  or a per-breakpoint prop. The rest do not even read the window (with React 19's `use`; older React
+  reads it always and re-renders them, correctly but not selectively). A theme change re-renders
+  everything that resolves tokens, since their styles change.
+
 Measured with `docs/bench/native-render.mts` (production React, 1000 cards rendered 21 times,
 interleaved), against a component that passes a style object computed once by hand:
 

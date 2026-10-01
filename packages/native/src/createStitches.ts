@@ -39,6 +39,9 @@ const isRecord = (value: unknown): value is { readonly [key: string]: unknown } 
 const isStyleObject = (value: unknown): value is StyleObject => isRecord(value)
 
 /** Whether a style object anywhere in these definitions writes a raw `@media (…)` block. */
+/** Whether a style object anywhere in these definitions has a breakpoint block, named or raw. */
+export const hasBreakpoint = (value: unknown): boolean => (isRecord(value) && Object.entries(value).some(([key, member]) => key.startsWith('@') || hasBreakpoint(member))) || (Array.isArray(value) && value.some(hasBreakpoint))
+
 const hasRawQuery = (value: unknown): boolean => (isRecord(value) && Object.entries(value).some(([key, member]) => key.startsWith('@media') || hasRawQuery(member))) || (Array.isArray(value) && value.some(hasRawQuery))
 
 /** Props as the resolver reads them: any record. Only the declared variant names and `css` are read. */
@@ -63,6 +66,12 @@ export interface StyleEngine {
 	readonly toStyleFunction: (args: readonly CssArgument[]) => StyleFunction<unknown>
 	/** The resolver behind a style function this engine made, so React can skip recomputing media per render. */
 	readonly resolverOf: (style: object) => Resolver | undefined
+	/**
+	 * Whether a style function this engine made has a breakpoint anywhere in its definitions. One
+	 * that does not can only depend on the window through a per-breakpoint prop, so React can leave
+	 * it alone when the window changes.
+	 */
+	readonly hasBreakpoints: (style: object) => boolean
 	/** Which breakpoints hold for a viewport, computed once per window size rather than per render. */
 	readonly mediaFor: (viewport: Viewport | undefined) => MediaContext
 	readonly createTheme: (definition: ThemeDefinition) => ThemeValues
@@ -116,6 +125,7 @@ export const createStyleEngine = (config: NativeConfig): StyleEngine => {
 	}
 
 	const resolvers = new WeakMap<object, Resolver>()
+	const withBreakpoints = new WeakSet<object>()
 
 	const toStyleFunction = (args: readonly CssArgument[]): StyleFunction<unknown> => {
 		const composers: Composer[] = []
@@ -184,6 +194,7 @@ export const createStyleEngine = (config: NativeConfig): StyleEngine => {
 		const styleFunction = Object.assign(style, { composers })
 
 		resolvers.set(styleFunction, resolve)
+		if (composers.some((composer) => hasBreakpoint(composer.definition))) withBreakpoints.add(styleFunction)
 
 		return styleFunction
 	}
@@ -194,6 +205,7 @@ export const createStyleEngine = (config: NativeConfig): StyleEngine => {
 		themeMap,
 		toStyleFunction,
 		resolverOf: (style) => resolvers.get(style),
+		hasBreakpoints: (style) => withBreakpoints.has(style),
 		mediaFor,
 		createTheme: (definition: ThemeDefinition): ThemeValues => toThemeValues(config.theme, definition),
 	}
