@@ -79,34 +79,24 @@ const matches = (compound: CompoundVariant, selection: ReadonlyMap<string, reado
 	return true
 }
 
-/**
- * Applies one composer in the order the cascade rules describe: base first, then variants in the
- * order they were declared, then compound variants in array order. Later assignments win, so what
- * you wrote last wins — the same result `cascade: 'declared'` gives on the web.
- */
-const applyComposer = (composer: Composer, selection: ReadonlyMap<string, readonly string[]>, context: StyleContext, into: NativeStyle): void => {
-	const { definition } = composer
+/** A style that applies, and its place in the declared order: depth, kind, declaration, breakpoint, value. */
+type Piece = readonly [depth: number, kind: number, declaration: number, breakpoint: number, value: number, style: StyleObject]
 
-	toStyle(definition, context, into)
-
-	for (const [variant, values] of Object.entries(definition.variants ?? {})) {
-		for (const selected of selection.get(variant) ?? []) {
-			const match = values[selected]
-
-			if (match) toStyle(match, context, into)
-		}
-	}
-
-	for (const compound of definition.compoundVariants ?? []) {
-		if (!matches(compound, selection)) continue
-		if (isStyleObject(compound.css)) toStyle(compound.css, context, into)
-	}
-}
+const comparePieces = (left: Piece, right: Piece): number => left[0] - right[0] || left[1] - right[1] || left[2] - right[2] || left[3] - right[3] || left[4] - right[4]
 
 /**
- * Composition depth decides first: everything of a later composer beats everything of an earlier
- * one, its variants included. `styled(Base, { color })` therefore overrides a `color` that Base
- * sets in a variant — the case that needs `!important` under the web's legacy cascade.
+ * Merges what applies in the order `cascade: 'declared'` puts it in on the web, so a style resolves
+ * the same on both:
+ *
+ * 1. Composition depth: everything of a later composer beats everything of an earlier one, its
+ *    variants included, so `styled(Base, { color })` overrides a `color` Base sets in a variant.
+ * 2. Kind: base, then variants, then compound variants.
+ * 3. Declaration order. A variant name is one declaration across depths: values an extension adds
+ *    to an inherited variant sort with the variant, where it was first declared, after the
+ *    inherited values.
+ * 4. Breakpoints of one variant: `@initial` first, then `config.media` order.
+ *
+ * The `css` prop comes last of everything.
  */
 export const render = (
 	composers: readonly Composer[],
@@ -119,9 +109,39 @@ export const render = (
 ): NativeStyle => {
 	const context: StyleContext = { theme, themeMap, media }
 	const selection = toSelection(composers, variantNames, props, media)
+	const homes = new Map<string, { readonly depth: number; readonly index: number }>()
+	const pieces: Piece[] = []
+
+	composers.forEach((composer, depth) => {
+		const { definition } = composer
+
+		pieces.push([depth, 0, 0, 0, 0, definition])
+
+		let valueIndex = 0
+
+		composer.variantNames.forEach((name, index) => {
+			let home = homes.get(name)
+
+			if (!home) homes.set(name, (home = { depth, index }))
+
+			const values = definition.variants?.[name] ?? {}
+
+			;(selection.get(name) ?? []).forEach((selected, breakpoint) => {
+				const match = values[selected]
+
+				if (match) pieces.push([home.depth, 1, home.index, breakpoint, (depth - home.depth) * 1000 + valueIndex, match])
+			})
+
+			valueIndex += Object.keys(values).length
+		})
+		;(definition.compoundVariants ?? []).forEach((compound, index) => {
+			if (matches(compound, selection) && isStyleObject(compound.css)) pieces.push([depth, 2, index, 0, 0, compound.css])
+		})
+	})
+
 	const style: NativeStyle = {}
 
-	for (const composer of composers) applyComposer(composer, selection, context, style)
+	for (const piece of pieces.sort(comparePieces)) toStyle(piece[5], context, style)
 
 	// The `css` prop is last of everything, as it is on the web.
 	if (overrides) toStyle(overrides, context, style)

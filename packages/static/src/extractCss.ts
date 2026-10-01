@@ -46,6 +46,9 @@ const isWalkable = (value: object): boolean => {
 	return prototype === null || prototype === Object.prototype
 }
 
+/** A variant value no variant declares, for an `@initial` that must not match. */
+const noMatch = '\u0000'
+
 /** Every prop combination worth rendering for one component, deduplicated by their JSON form. */
 const toPropSets = (composers: Iterable<ComposerTuple>, mediaNames: readonly string[], responsive: boolean): Record<string, unknown>[] => {
 	const propSets = new Map<string, Record<string, unknown>>()
@@ -75,9 +78,16 @@ const toPropSets = (composers: Iterable<ComposerTuple>, mediaNames: readonly str
 			// few conditions, so this stays a handful of renders per breakpoint.
 			const conditions = Object.entries(match)
 
+			// A condition at a breakpoint comes in two forms: with `@initial` left to the default
+			// variant, and with an `@initial` that does not match, since a condition that also holds at
+			// `@initial` holds everywhere and adds no breakpoint of its own.
 			for (const media of mediaNames) {
 				for (let subset = 1; subset < 1 << conditions.length; subset++) {
-					add(Object.fromEntries(conditions.map(([name, value], index) => [name, subset & (1 << index) ? { [`@${media}`]: value } : value])))
+					for (let initials = 0; initials < 1 << conditions.length; initials++) {
+						if ((initials & subset) !== initials) continue
+
+						add(Object.fromEntries(conditions.map(([name, value], index) => [name, subset & (1 << index) ? { ...(initials & (1 << index) ? { '@initial': noMatch } : {}), [`@${media}`]: value } : value])))
+					}
 				}
 			}
 		}
@@ -116,6 +126,20 @@ export const extractCss = (stitches: StitchesInstance, sources: readonly unknown
 			for (const props of toPropSets(value[internal].composers, mediaNames, responsive)) {
 				// A component wrapping a React component defers its rules until the injector renders.
 				render(props).deferredInjector?.()
+			}
+
+			// Atomic output writes only the declarations that win in a combination, so one that loses in
+			// every combination above but wins in another would be missing. Writing each style object
+			// on its own, plainly and at each breakpoint, writes every declaration's class: an atom's
+			// class depends on its declaration and conditions, not on the component.
+			if (stitches.config.atomic) {
+				for (const [, base, singularVariants, compoundVariants] of value[internal].composers) {
+					for (const style of [base, ...singularVariants.map((variant) => variant[1]), ...compoundVariants.map((variant) => variant[1])]) {
+						stitches.css(style)()
+
+						if (responsive) for (const media of mediaNames) stitches.css({ [`@${media}`]: style })()
+					}
+				}
 			}
 
 			return

@@ -903,6 +903,12 @@ Two gaps, neither closed by this run:
   `styled(ReactComponent)`), fixed in PR #14. This is the migration baseline: the old tests are
   never rewritten, and the allowlist is the exact list of what changes.
 
+- **Randomized differential checks (2026-10-01).** `docs/bench/browser-differential.mts` resolves
+  random compositions under declared, atomic and native and requires all three to agree;
+  `packages/static/tests/extract-random.js` requires extraction to cover every covered render. Both
+  are seeded and reproducible. Their first runs found a compound-variant bug in the web runtime,
+  two ordering bugs in native and two coverage gaps in static extraction; see `docs/bench/README.md`.
+
 ### 11.7 Open questions for review
 
 - Depth cap of 8: fine, or make it configurable?
