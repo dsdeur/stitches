@@ -474,13 +474,13 @@ const getTargetVariantsToAdd = (targetVariants: VariantDef[], homes: VariantHome
 				let initialMatched = false
 				let qOrder = 0
 				let matchedQueries: string[] | undefined
+				let queryMediaIndex = -1
 				for (const query in pPair) {
 					if (vPair === String(pPair[query])) {
 						if (query !== '@initial') {
 							const cleanQuery = query.slice(1)
 							;(matchedQueries = matchedQueries || []).push(cleanQuery in media ? media[cleanQuery] : query.replace(/^@media ?/, ''))
-							mediaIndex = Math.max(mediaIndex, mediaOrder.get(cleanQuery) ?? mediaOrder.size)
-							isResponsive = true
+							queryMediaIndex = Math.max(queryMediaIndex, mediaOrder.get(cleanQuery) ?? mediaOrder.size)
 						} else {
 							initialMatched = true
 						}
@@ -491,12 +491,17 @@ const getTargetVariantsToAdd = (targetVariants: VariantDef[], homes: VariantHome
 
 					++qOrder
 				}
-				if (matchedQueries && matchedQueries.length) {
+				// In a compound variant, a condition that matched at @initial holds at every width, so its
+				// breakpoints must not narrow where the compound applies. A singular variant keeps writing
+				// both its unwrapped and its wrapped rule (below), as it always has.
+				if (matchedQueries && matchedQueries.length && !(isCompoundVariant && initialMatched)) {
 					const queryKey = matchedQueries.join(', ')
 					vStyle = {
 						['@media ' + queryKey]: vStyle,
 					}
 					responsiveQueryKeys.push(queryKey)
+					mediaIndex = Math.max(mediaIndex, queryMediaIndex)
+					isResponsive = true
 				}
 
 				if (!didMatch) continue targetVariants
