@@ -62,11 +62,12 @@ writes the iOS project with `expo prebuild`, builds it in Release with `xcodebui
 launches it with `simctl`, and prints a table per mode. It needs no Simulator window, so it runs
 over SSH. Raw results land in `results/<mode>.json`.
 
-| Variable    | Default         |                                                 |
-| ----------- | --------------- | ----------------------------------------------- |
-| `MODES`     | `off,on`        | React Compiler modes to run.                    |
-| `IOS`       | any             | Only simulators of this iOS version, e.g. `26`. |
-| `SIMULATOR` | the last iPhone | A simulator by name or UDID.                    |
+| Variable    | Default         |                                                                            |
+| ----------- | --------------- | -------------------------------------------------------------------------- |
+| `MODES`     | `off,on`        | React Compiler modes to run.                                               |
+| `IOS`       | any             | Only simulators of this iOS version, e.g. `26`.                            |
+| `SIMULATOR` | the last iPhone | A simulator by name or UDID.                                               |
+| `MICRO`     | unset           | Time the pieces of one styled element on Hermes, instead of the scenarios. |
 
 The app uses Expo SDK 57 (React Native 0.86). iOS 27 stops any app at launch that has not adopted
 the scene life cycle, and SDK 57's iOS template has not; the first SDK whose template has is 58. So
