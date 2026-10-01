@@ -14,9 +14,14 @@ const comma = /\s*,\s*(?![^()]*\))/
 /** Default toString method of Objects. */
 const toStringOfObject = Object.prototype.toString
 
-export const toCssRules = (style: CSSObject, selectors: string[], conditions: string[], config: StitchesConfig, onCssText: (cssText: string) => void): void => {
-	let currentRule: [string[], string[], string[]] | undefined = undefined
-
+/**
+ * Walks a style object and reports every declaration it resolves to, one at a time, with the
+ * selectors and at-rule conditions it applies under: utils expanded, polyfills applied, tokens and
+ * units resolved, nesting flattened. `onRuleEnd` marks where one css rule ends, so a caller that
+ * groups declarations into rules (toCssRules) groups them exactly as before, and one that wants
+ * each declaration on its own (the atomic output mode) can ignore it.
+ */
+export const walkDeclarations = (style: CSSObject, selectors: string[], conditions: string[], config: StitchesConfig, onDeclaration: (declaration: string, selectors: string[], conditions: string[]) => void, onRuleEnd: () => void): void => {
 	let lastUtil: StitchesConfig['utils'][string] | null
 	let lastPoly: ((d: string) => Record<string, string>) | null
 
@@ -70,16 +75,10 @@ export const toCssRules = (style: CSSObject, selectors: string[], conditions: st
 						const nextConditions = isAtRuleLike ? conditions.concat(name) : [...conditions]
 						const nextSelections = isAtRuleLike ? [...selectors] : toResolvedSelectors(selectors, name.split(comma))
 
-						if (currentRule !== undefined) {
-							onCssText(toCssString(...currentRule))
-						}
-
-						currentRule = undefined
+						onRuleEnd()
 
 						walk(data as CSSObject, nextSelections, nextConditions)
 					} else {
-						if (currentRule === undefined) currentRule = [[], selectors, conditions]
-
 						name = !isAtRuleLike && name.charCodeAt(0) === 36 ? `--${toTailDashed(config.prefix)}${name.slice(1).replace(/\$/g, '-')}` : name
 
 						const resolved = isRuleLike
@@ -90,7 +89,7 @@ export const toCssRules = (style: CSSObject, selectors: string[], conditions: st
 									: String(data)
 								: toTokenizedValue(toSizingValue(camelName, data == null ? '' : String(data)), config.prefix, config.themeMap[camelName], config.theme)
 
-						currentRule[0].push(`${isAtRuleLike ? `${name} ` : `${toHyphenCase(name)}:`}${resolved}`)
+						onDeclaration(`${isAtRuleLike ? `${name} ` : `${toHyphenCase(name)}:`}${resolved}`, selectors, conditions)
 					}
 				}
 			}
@@ -98,13 +97,31 @@ export const toCssRules = (style: CSSObject, selectors: string[], conditions: st
 
 		each(style)
 
-		if (currentRule !== undefined) {
-			onCssText(toCssString(...currentRule))
-		}
-		currentRule = undefined
+		onRuleEnd()
 	}
 
 	walk(style, selectors, conditions)
+}
+
+export const toCssRules = (style: CSSObject, selectors: string[], conditions: string[], config: StitchesConfig, onCssText: (cssText: string) => void): void => {
+	let currentRule: [string[], string[], string[]] | undefined = undefined
+
+	walkDeclarations(
+		style,
+		selectors,
+		conditions,
+		config,
+		(declaration, declarationSelectors, declarationConditions) => {
+			if (currentRule === undefined) currentRule = [[], declarationSelectors, declarationConditions]
+
+			currentRule[0].push(declaration)
+		},
+		() => {
+			if (currentRule !== undefined) onCssText(toCssString(...currentRule))
+
+			currentRule = undefined
+		},
+	)
 }
 
 const toCssString = (declarations: string[], selectors: string[], conditions: string[]): string =>

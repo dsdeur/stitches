@@ -103,12 +103,15 @@ const defineStyles = ({ css, globalCss, keyframes, createTheme }) => {
 }
 
 describe('extractCss', () => {
-	for (const cascade of ['legacy', 'declared']) {
+	for (const cascade of ['legacy', 'declared', 'atomic']) {
+		// atomic output is its own option; it runs with the default cascade
+		const modeOf = (mode) => (mode === 'atomic' ? { atomic: true } : { cascade: mode })
+
 		test(`${cascade}: after hydrating from the file, rendering every variant injects nothing`, () => {
-			const server = createCoreStitches({ cascade, media, root: null })
+			const server = createCoreStitches({ ...modeOf(cascade), media, root: null })
 			const extracted = extractCss(server, [defineStyles(server)])
 
-			const client = createCoreStitches({ cascade, media, root: toHydratingRoot(extracted) })
+			const client = createCoreStitches({ ...modeOf(cascade), media, root: toHydratingRoot(extracted) })
 			const styles = defineStyles(client)
 			const { button, iconButton } = styles
 
@@ -127,13 +130,15 @@ describe('extractCss', () => {
 		})
 
 		test(`${cascade}: a combination the file lacks is injected at runtime, into the hydrated sheet`, () => {
-			const server = createCoreStitches({ cascade, media, root: null })
+			const server = createCoreStitches({ ...modeOf(cascade), media, root: null })
 			const extracted = extractCss(server, [defineStyles(server)])
 
-			const client = createCoreStitches({ cascade, media, root: toHydratingRoot(extracted) })
+			const client = createCoreStitches({ ...modeOf(cascade), media, root: toHydratingRoot(extracted) })
 			// a compound variant whose conditions hold at different breakpoints is its own class
-			const { className } = defineStyles(client).button({ size: { '@bp2': 'large' }, tone: { '@bp1': 'brand' } })
-			const injected = className.split(' ').filter((name) => !extracted.includes(name))
+			const { button } = defineStyles(client)
+			const { className } = button({ size: { '@bp2': 'large' }, tone: { '@bp1': 'brand' } })
+			// in atomic output a component's own class carries no rule, so it is never in the file
+			const injected = className.split(' ').filter((name) => name !== button.className && !extracted.includes(name))
 
 			expect(injected).toHaveLength(1)
 			expect(client.getCssText()).toContain(`.${injected[0]}{font-weight:700}`)

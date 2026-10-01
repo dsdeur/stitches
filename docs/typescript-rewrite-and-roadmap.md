@@ -321,7 +321,24 @@ Decision (2026-10-01): **both.** A shipped as part of `@stitches/static` (`utili
 `utilityCss`, and in `bundleCss`): one class per token per `themeMap` property, named after the css
 property (`padding-2`, `background-color-primary`), breakpoints as `tablet:` prefixes and opt-in
 states, valued by the token's custom property so themes switch them. B, the atomic output mode for
-components, is next and separate: it changes how core renders, so it is an opt-in config flag.
+components, shipped the same day as an opt-in config flag, below.
+
+**Shipped 2026-10-01: B, `createStitches({ atomic: true })`.** One class per declaration, decided per
+element at render time: the style objects that apply are merged in the declared order and only the
+winning declaration of each (selector, conditions, property) slot keeps its class, so the sheet never
+has to choose between two classes on one element for the same thing. The sheet orders only what can
+still overlap: breakpoints after unconditional styles in `config.media` order, shorthands before
+longhands (a later shorthand drops the longhands it resets while merging), and pseudo-classes in a
+fixed order. `toCssRules` was split so atomic output reuses the whole conversion (`walkDeclarations`
+reports each declaration; `toCssRules` groups them into rules exactly as before, verified
+byte-identical with `classname-parity.mts`). The usage constraint turned out smaller than expected:
+components keep their own class on the element, without rules, so `${Button}` selectors still work;
+what stops working is a selector written against a variant class. Merging drops every earlier
+declaration a later one covers (same selector, same or reset property, same or more conditions), and
+restates a later longhand under an earlier breakpoint shorthand, so atomic output resolves exactly
+like `'declared'`: a differential check in `yarn test:browser` renders 480 variant combinations in
+both modes and compares computed styles. The one remaining difference is two different breakpoints
+declared against `config.media` order. Documented in `docs/cascade.md`.
 
 Decision note (2026-09-05): the usage constraint in B is acceptable ("components must be
 used a certain way, same as `li` in `ul`"). So B is not ruled out. Open question: which
@@ -504,7 +521,7 @@ list; it now points here. Items marked done stay for context.
 10. Static extraction (5.1). `@stitches/static` shipped 2026-09-30 as a function a build script calls;
     a Vite plugin and a strict mode are the follow-ups.
 11. Utility sheet (5.2): both. A shipped 2026-10-01 in `@stitches/static` (`bundleCss`, utilities);
-    B (atomic component output) is next, behind an opt-in flag.
+    B shipped 2026-10-01 as `createStitches({ atomic: true })` (see 5.2 and `docs/cascade.md`).
 12. Native adapter (5.3), after settling the shared vocabulary.
 
 ## 9. Open questions

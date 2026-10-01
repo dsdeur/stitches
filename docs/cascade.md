@@ -145,3 +145,53 @@ are the ones that were flaky across navigation.
 Class names are identical in both modes. A style object used at depth 0 in one component
 and depth 1 in another produces the same class name; only which copy applies changes.
 Warm renders are unaffected; ordering costs one binary search per newly injected rule.
+
+## Atomic output
+
+```js
+createStitches({ atomic: true })
+```
+
+`atomic` is a separate option, off by default. With it, stitches writes one class per declaration
+instead of one per style object, so `color: red` is one rule however many components use it. The
+file stops growing with the number of components and grows with the number of distinct
+declarations instead.
+
+Which declaration an element gets is no longer decided by where rules sit in the sheet. When a
+component renders, the style objects that apply are merged in the order of rules 1 to 3 above
+(depth, then base before variants before compound variants, then declaration order, then the
+`css` prop last), and only the winning declaration of each property keeps its class. An element
+never carries two atomic classes that compete for the same property under the same selector and
+conditions, so the `cascade` option has no say over components in this mode: they resolve by the
+declared rules, whatever `cascade` is set to. Themes and globals are unchanged (rule 5).
+
+Merging also drops every earlier declaration a later one covers: the same property (or one a later
+shorthand resets) under the same selector and the same conditions or more of them. An unconditional
+`css` prop therefore removes a variant's breakpoint value for that property, exactly as in
+`'declared'`. Checked in a real browser: every variant combination of a three-level composition,
+with shorthands, compound variants, the `css` prop and responsive props, resolves to the same
+computed styles in both modes (`yarn test:browser`).
+
+The sheet still orders what survives and can overlap on one element:
+
+- **Breakpoints after unconditional styles**, then breakpoints in `config.media` order. What is left
+  to order here is an earlier unconditional value under a later breakpoint value, which this
+  resolves as `'declared'` does. The one case it cannot: two *different* breakpoints that both
+  match, declared in the opposite order to `config.media` (`@lg` in the base, `@md` in a variant).
+  Atomic output gives the later breakpoint in `config.media` the win; `'declared'` gives it to the
+  later declaration.
+- **Shorthands before longhands.** A shorthand declared after a longhand removes it from the
+  element (`padding: 0` after `paddingTop: 8` leaves only `padding: 0`), so a longhand that is still
+  there was declared later and should win, and it sorts after. When that later longhand meets an
+  earlier shorthand under a breakpoint (`paddingTop: 1` after `'@md': { padding: 3 }`), it is also
+  written under the breakpoint, so it sorts after the shorthand there too. Two shorthands that only partly
+  overlap on one element (`borderTop` and `borderColor`) have no fixed order between them; avoid
+  mixing them on one element.
+- **Pseudo-classes in a fixed order:** `:link`, `:visited`, `:hover`, `:focus-within`, `:focus`,
+  `:focus-visible`, `:active`, `:disabled`. A hovered and pressed button shows its `:active` style.
+
+What changes for markup: an element's classes are its components' own classes (still on the
+element, without rules of their own, so `${Button}` selectors keep working) followed by `a-…`
+classes. Variant classes (`c-x-hash-size-large`) are no longer added, so a selector written against
+one stops matching. Server and client must agree on `atomic` and on `media`, since both decide which
+group a rule is in.
