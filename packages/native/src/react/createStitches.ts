@@ -14,6 +14,26 @@ interface Window {
 	readonly media: MediaContext
 }
 
+/** One instance's theme and breakpoints, as a component that renders compiled styled elements reads them. */
+interface Environment {
+	readonly theme: ThemeValues
+	readonly media: MediaContext
+}
+
+/**
+ * Every enclosing provider's environment, by instance. What `useStitchesEnvironment()` returns and
+ * `styledElement` reads, so one hook serves any number of instances. Its identity changes exactly
+ * when a theme or window above changes, which is what lets React Compiler memoize compiled elements.
+ */
+type Environments = ReadonlyMap<object, Environment>
+
+const EnvironmentsContext = React.createContext<Environments>(new Map())
+
+/** Each styled component's render without a component of its own, for `styledElement`. */
+type FlatRender = (props: PropsRecord, key: React.Key | undefined, environments: Environments, children: readonly React.ReactNode[]) => React.ReactElement
+
+const flatRenders = new WeakMap<object, FlatRender>()
+
 /**
  * React 19's `use` may be called conditionally, which is what lets a component read the window only
  * when its styles depend on it. Older React reads it always: correct, just not selective.
@@ -76,6 +96,7 @@ const isElementType = (value: unknown): value is React.ElementType => typeof val
 export const createStitches = <const Config extends NativeConfig = NativeConfig>(init?: Config): ReactStitches<MediaOf<Config>> => {
 	const engine = createStyleEngine(init ?? {})
 	const noWindow: Window = { viewport: undefined, media: engine.mediaFor(undefined) }
+	const defaultEnvironment: Environment = { theme: engine.theme, media: noWindow.media }
 	const ThemeContext = React.createContext<ThemeValues>(engine.theme)
 	const WindowContext = React.createContext<Window>(noWindow)
 
@@ -110,13 +131,12 @@ export const createStitches = <const Config extends NativeConfig = NativeConfig>
 		const resolve = toResolver(style)
 		const variantNames = new Set(style.composers.flatMap((composer) => composer.variantNames))
 
-		const Styled = React.forwardRef<React.ComponentRef<Type>, StyledProps<Type, VariantsOf<readonly [Type, ...Definitions], MediaOf<Config>>>>((props, ref) => {
-			const source: PropsRecord = isRecord(props) ? props : {}
-			const theme = React.useContext(ThemeContext)
-			const media = useMedia(needsWindow(style, source, variantNames))
-
-			// The resolver reads the variants and `css` straight from the props; everything else but
-			// `as` and `style` is forwarded, so this is the one copy of the props a render makes.
+		/**
+		 * The props the wrapped component receives: the resolver reads the variants and `css` straight
+		 * from the props; everything else but `as` and `style` is forwarded, so this is the one copy of
+		 * the props a render makes.
+		 */
+		const toElementProps = (source: PropsRecord, theme: ThemeValues, media: MediaContext): Record<string, unknown> => {
 			const forwarded: Record<string, unknown> = {}
 
 			for (const key in source) {
@@ -128,6 +148,13 @@ export const createStitches = <const Config extends NativeConfig = NativeConfig>
 
 			// React Native flattens a style array, later entries winning, so a style passed in still wins.
 			forwarded.style = passedStyle === undefined || passedStyle === null ? resolved : [resolved, passedStyle]
+
+			return forwarded
+		}
+
+		const Styled = React.forwardRef<React.ComponentRef<Type>, StyledProps<Type, VariantsOf<readonly [Type, ...Definitions], MediaOf<Config>>>>((props, ref) => {
+			const source: PropsRecord = isRecord(props) ? props : {}
+			const forwarded = toElementProps(source, React.useContext(ThemeContext), useMedia(needsWindow(style, source, variantNames)))
 
 			// React 19 treats `ref` as an ordinary prop; only forward one the caller actually gave.
 			if (ref !== null) forwarded.ref = ref
@@ -142,6 +169,20 @@ export const createStitches = <const Config extends NativeConfig = NativeConfig>
 		const component = Object.assign(Styled, { displayName: `Styled.${typeName}`, style })
 
 		styledParts.set(component, { type: Type, style })
+
+		// What @stitches/native-babel compiles an element of this component into: the wrapped element,
+		// styled, with no component of its own. The compiled parent reads the environment with one
+		// hook and passes it in, so this is a pure function of its arguments.
+		flatRenders.set(component, (source, key, environments, children) => {
+			const environment = environments.get(engine) ?? defaultEnvironment
+			const forwarded = toElementProps(source, environment.theme, environment.media)
+
+			if (key !== undefined) forwarded.key = key
+
+			const as = source.as
+
+			return React.createElement(isElementType(as) ? as : Type, forwarded, ...children)
+		})
 
 		return component
 	}
@@ -175,7 +216,13 @@ export const createStitches = <const Config extends NativeConfig = NativeConfig>
 			return { viewport: size, media: engine.mediaFor(size) }
 		}, [width, height])
 
-		return React.createElement(ThemeContext.Provider, { value: theme ?? parentTheme }, React.createElement(WindowContext.Provider, { value: window }, children))
+		const activeTheme = theme ?? parentTheme
+
+		// The same, by instance, for components whose styled elements @stitches/native-babel compiled.
+		const parentEnvironments = React.useContext(EnvironmentsContext)
+		const environments = React.useMemo<Environments>(() => new Map(parentEnvironments).set(engine, { theme: activeTheme, media: window.media }), [parentEnvironments, activeTheme, window])
+
+		return React.createElement(ThemeContext.Provider, { value: activeTheme }, React.createElement(WindowContext.Provider, { value: window }, React.createElement(EnvironmentsContext.Provider, { value: environments }, children)))
 	}
 
 	return {
@@ -189,4 +236,23 @@ export const createStitches = <const Config extends NativeConfig = NativeConfig>
 		useTheme: () => React.useContext(ThemeContext),
 		useStyle,
 	}
+}
+
+/**
+ * The hook @stitches/native-babel puts at the top of a component whose styled elements it compiled:
+ * every enclosing provider's theme and window. Not meant to be called by hand.
+ */
+export const useStitchesEnvironment = (): Environments => React.useContext(EnvironmentsContext)
+
+/**
+ * What @stitches/native-babel compiles `<Card size="large" />` into: a styled component renders its
+ * wrapped element directly, styled for the environment passed in, with no component of its own;
+ * anything else is created exactly as JSX would create it. Not meant to be called by hand.
+ */
+export const styledElement = (type: React.ElementType, props: PropsRecord | null, key: React.Key | undefined, environments: Environments, ...children: React.ReactNode[]): React.ReactElement => {
+	const flat = typeof type === 'string' ? undefined : flatRenders.get(type)
+
+	if (flat) return flat(props ?? {}, key, environments, children)
+
+	return React.createElement(type, key === undefined ? props : { ...props, key }, ...children)
 }
