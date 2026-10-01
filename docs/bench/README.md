@@ -89,3 +89,19 @@ variant in it adds no style rule to any sheet: the runtime hydrated from the fil
 
 CI runs it after the build (it installs Chromium first). It has already earned its keep: it found that a hydrated
 but empty group was emitted as a bare `@media {}` wrapper, now guarded by a node test too.
+
+## Native render cost
+
+`native-render.mts` measures what `@stitches/native` adds per render, against the built package:
+1000 cards rendered 21 times through `react-dom/server` under production React, interleaved, for a
+hand-computed style object, a bare `forwardRef` wrapper, `useStyle` and `styled`. Run it with
+`NODE_ENV=production` after `yarn build`. Development React adds per-component bookkeeping that
+swamps the difference, and production react-test-renderer cannot be flushed synchronously, which
+is why it renders to a string. It throws if the last render did not produce every card, so it cannot
+silently measure nothing.
+
+2026-10-01, same benchmark before and after: the style function went from 1399 ns to about 50 ns per
+warm call (breakpoints evaluated once per window size instead of per call, and a cache tree keyed by
+prop values instead of a JSON string), and `styled` from +219% over hand-computed styles (about
+1.3 µs per card) to +10–15% (60–85 ns per card). `useStyle` costs the same as `styled` and adds no
+component to the tree. Run-to-run noise is a few percent; compare medians of several runs.

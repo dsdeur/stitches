@@ -24,13 +24,15 @@ const pkg = (name: 'stringify' | 'core' | 'react'): UserConfig => ({
 })
 
 /**
- * The native package is built on its own terms: no browser platform, no IIFE global and no React,
- * because nothing in it touches the DOM or a renderer. Its types are generated from the source
- * rather than hand-written like the web packages'; it is new, small, and has no richer public
- * surface to express than what the code already says.
+ * The native package is built on its own terms: no browser platform and no IIFE global, because
+ * nothing in it touches the DOM. Two entries: the main one is React-free, the react one adds
+ * `styled` and imports React, which stays external. Its types are generated from the source rather
+ * than hand-written like the web packages'; it has no richer public surface to express than what
+ * the code already says.
  */
 const native: UserConfig = {
-	entry: { index: 'packages/native/src/index.ts' },
+	entry: { index: 'packages/native/src/index.ts', react: 'packages/native/src/react/index.ts' },
+	external: ['react'],
 	outDir: 'packages/native/dist',
 	format: ['esm', 'cjs'],
 	platform: 'neutral',
