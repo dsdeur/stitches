@@ -1,8 +1,8 @@
+// @vitest-environment jsdom
 import * as React from 'react'
 import type { ReactElement } from 'react'
-import * as renderer from 'react-test-renderer'
-import type { ReactTestRendererJSON } from 'react-test-renderer'
 import { createStitches } from '../src/index.ts'
+import { render as renderTree } from './helpers/render.ts'
 
 function render(component: { render?: (props?: Record<string, unknown>, ref?: unknown) => ReactElement<Record<string, unknown>> | null }, props?: Record<string, unknown>): ReactElement<Record<string, unknown>> {
 	if (!component.render) throw new Error('render is undefined')
@@ -11,15 +11,9 @@ function render(component: { render?: (props?: Record<string, unknown>, ref?: un
 	return result
 }
 
-function toJSON(r: renderer.ReactTestRenderer): ReactTestRendererJSON {
-	const json = r.toJSON()
-	if (json === null || Array.isArray(json)) throw new Error('unexpected toJSON result')
-	return json
-}
-
 describe('styled.withConfig', () => {
 	test('Basic css calls without a config', () => {
-		const { styled, getCssText } = createStitches()
+		const { styled, getCssText } = createStitches({ root: null })
 
 		const ComponentToRender = styled.withConfig()('button', { color: 'DodgerBlue' })
 		const className = render(ComponentToRender).props.className
@@ -31,7 +25,7 @@ describe('styled.withConfig', () => {
 	})
 
 	test('Creates the correct className with a componentId', () => {
-		const { styled, getCssText } = createStitches()
+		const { styled, getCssText } = createStitches({ root: null })
 
 		const componentConfig = {
 			componentId: 'cool-id',
@@ -46,7 +40,7 @@ describe('styled.withConfig', () => {
 	})
 
 	test('Creates the correct className with a displayName', () => {
-		const { styled, getCssText } = createStitches()
+		const { styled, getCssText } = createStitches({ root: null })
 
 		const componentConfig = {
 			displayName: 'my-cool-display-name',
@@ -61,7 +55,7 @@ describe('styled.withConfig', () => {
 	})
 
 	test('Creates the correct className with a displayName and componentId', () => {
-		const { styled, getCssText } = createStitches()
+		const { styled, getCssText } = createStitches({ root: null })
 
 		const componentConfig = {
 			componentId: 'cool-id',
@@ -77,7 +71,7 @@ describe('styled.withConfig', () => {
 	})
 
 	test('Sets displayName on the component when passed as a componentConfig', () => {
-		const { styled } = createStitches()
+		const { styled } = createStitches({ root: null })
 
 		const componentConfig = {
 			componentId: 'cool-id',
@@ -88,7 +82,7 @@ describe('styled.withConfig', () => {
 	})
 
 	test('Creates the correct className with a componentConfig while extending components', () => {
-		const { styled, getCssText } = createStitches()
+		const { styled, getCssText } = createStitches({ root: null })
 
 		const ComponentToExtend = styled.withConfig({
 			componentId: 'component-to-extend-id',
@@ -106,7 +100,7 @@ describe('styled.withConfig', () => {
 
 describe('shouldForwardStitchesProp', () => {
 	test('Forwards the variant to the underlying component when shouldForwardStitchesProp returns true', () => {
-		const { styled } = createStitches()
+		const { styled } = createStitches({ root: null })
 
 		const ReactComponent = ({ isOpen }: { isOpen?: boolean }) => {
 			return React.createElement('div', {}, isOpen ? 'open' : 'closed')
@@ -125,17 +119,11 @@ describe('shouldForwardStitchesProp', () => {
 			},
 		})
 
-		let Rendered: renderer.ReactTestRenderer | undefined
-		renderer.act(() => {
-			Rendered = renderer.create(React.createElement(StitchesComponent, { isOpen: true }))
-		})
-
-		if (Rendered === undefined) throw new Error('Rendered is undefined')
-		expect(toJSON(Rendered).children?.[0]).toBe('open')
+		expect(renderTree(React.createElement(StitchesComponent, { isOpen: true })).element.textContent).toBe('open')
 	})
 
 	test('Does not render the underlying ReactComponent when an as prop is provided and shouldForwardStitchesProp returns false', () => {
-		const { styled } = createStitches()
+		const { styled } = createStitches({ root: null })
 
 		const ReactComponent = ({ as: asProp }: { as?: string }) => {
 			return React.createElement(asProp || 'button', {}, 'hola from child')
@@ -147,17 +135,14 @@ describe('shouldForwardStitchesProp', () => {
 
 		const StitchesComponent = styled.withConfig(componentOneConfig)(ReactComponent, {})
 
-		let Rendered: renderer.ReactTestRenderer | undefined
-		renderer.act(() => {
-			Rendered = renderer.create(React.createElement(StitchesComponent, { as: 'a' }, ['comp']))
-		})
+		const { element } = renderTree(React.createElement(StitchesComponent, { as: 'a' }, ['comp']))
 
-		if (Rendered === undefined) throw new Error('Rendered is undefined')
-		expect(toJSON(Rendered).children?.[0]).toBe('comp')
+		expect(element.tagName).toBe('A')
+		expect(element.textContent).toBe('comp')
 	})
 
 	test('Forwards the as prop to the underlying component when shouldForwardStitchesProp returns true and the asp prop was defined', () => {
-		const { styled } = createStitches()
+		const { styled } = createStitches({ root: null })
 
 		const ReactComponent = ({ as: asProp }: { as?: string }) => {
 			return React.createElement('div', {}, asProp || 'no-as-prop-found')
@@ -168,17 +153,10 @@ describe('shouldForwardStitchesProp', () => {
 		}
 		const StitchesComponent = styled.withConfig(componentOneConfig)(ReactComponent, {})
 
-		let Rendered: renderer.ReactTestRenderer | undefined
-		renderer.act(() => {
-			Rendered = renderer.create(React.createElement(StitchesComponent))
-		})
-		if (Rendered === undefined) throw new Error('Rendered is undefined')
-		expect(toJSON(Rendered).children?.[0]).toBe('no-as-prop-found')
+		const rendered = renderTree(React.createElement(StitchesComponent))
+		expect(rendered.element.textContent).toBe('no-as-prop-found')
 
-		renderer.act(() => {
-			if (Rendered === undefined) throw new Error('Rendered is undefined')
-			Rendered.update(React.createElement(StitchesComponent, { as: 'a' }))
-		})
-		expect(toJSON(Rendered).children?.[0]).toBe('a')
+		rendered.rerender(React.createElement(StitchesComponent, { as: 'a' }))
+		expect(rendered.element.textContent).toBe('a')
 	})
 })

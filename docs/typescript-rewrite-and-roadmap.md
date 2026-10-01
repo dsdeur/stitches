@@ -88,7 +88,7 @@ What each dev dependency is really for, and the verdict:
 | Lint | `eslint` 7, `@typescript-eslint/*` 5 | **Done 2026-09-05:** replaced by oxlint (`.oxlintrc.json`). |
 | Package hygiene | `@skypack/package-check` | **Done 2026-09-05:** replaced by publint (`yarn lint:pkg`, runs after build). |
 | Type generation | `csstype` | Keep. `types/css.d.ts` is generated from it by `.task/build-csstype.js`. |
-| React tests | `react` 17, `react-test-renderer` 17, `@types/react*` 17 | **Done 2026-09-05:** on 19. `react-test-renderer` 19 is deprecated but still published and still works, so the test suite is unchanged rather than rewritten onto `react-dom` under jsdom; that migration is still open. The upgrade found one real incompatibility, below. |
+| React tests | `react` 17, `react-test-renderer` 17, `@types/react*` 17 | **Done 2026-09-05:** on 19. The upgrade found one real incompatibility, below. **2026-10-01:** the react package's tests render through `react-dom` under jsdom; `react-test-renderer` remains only for the native package's component tests (task 2 in section 8). |
 | Core | `typescript`, `prettier`, `@types/node` | Keep. Bump `@types/node` to the chosen Node version. |
 
 ### Build: tsdown (or tsup), not Vite
@@ -444,7 +444,7 @@ list; it now points here. Items marked done stay for context.
    relative path), so `.task/pack.js` stages the publishable manifest with exports rewritten to
    `dist`; `yarn lint:pkg` lints the staged form and the release workflow must publish from it. Publishing goes to GitHub Packages (section 9).
 2. Toolchain replacement (section 2b): Vitest, then tsdown, then eslint flat config +
-   publint, then React 19 for tests. Vitest, tsdown, oxlint, publint and React 19 done 2026-09-05; moving the react tests off the deprecated react-test-renderer remains. May run in parallel with 3 to 5; runtime PRs open at
+   publint, then React 19 for tests. Vitest, tsdown, oxlint, publint and React 19 done 2026-09-05. The react package's tests moved off the deprecated react-test-renderer on 2026-10-01: they render through react-dom in jsdom (pinned to 27.4.0: the current 30.x pulls in a dependency that requires Node 22.22.2 or newer), via `packages/react/tests/helpers/render.ts`. Stitches keeps its mock sheet there (`root: null`), because jsdom's CSS parser rejects the `--sxs{…}` marker real browsers accept; `yarn test:browser` covers the real document. react-test-renderer stays a dev dependency only for `@stitches/native`'s component tests, whose React Native host elements carry style objects and arrays that react-dom would turn into DOM attributes. May run in parallel with 3 to 5; runtime PRs open at
    the same time rebase onto it.
 3. Precompute variant hashes (3.4 item 1). Done 2026-09-05, PR #1.
 4. Deterministic sheet order (10.1 A; subsumes the cascade-layers item in section 4).

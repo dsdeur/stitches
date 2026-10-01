@@ -74,6 +74,7 @@
   },
   "private": true,
   "devDependencies": {
+    "jsdom": "27.4.0",
     "oxlint": "1.81.0",
     "playwright": "1.63.0",
     "prettier": "3.8.2",
