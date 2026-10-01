@@ -190,6 +190,135 @@ for (const cascade of ['legacy', 'declared'] as const) {
 	}
 }
 
+/**
+ * Atomic output resolves per element at render time; the browser must agree with what the merge
+ * decided, with every rule written in the order that would mislead a naive sheet.
+ */
+const atomicCase = `() => {
+	const { css } = stitches.createStitches({ atomic: true, media: { wide: '(min-width: 1px)' } })
+	const resolve = (className, property) => {
+		const element = document.createElement('div')
+		element.className = className
+		document.body.appendChild(element)
+		return getComputedStyle(element)[property]
+	}
+
+	// the parent renders first, so its variant's rule is written before the extension's
+	const parent = css({ color: 'rgb(0, 0, 0)', variants: { tone: { muted: { color: 'rgb(1, 1, 1)' } } }, defaultVariants: { tone: 'muted' } })
+	parent()
+	const child = css(parent, { color: 'rgb(2, 2, 2)' })
+
+	// the longhand is written before the shorthand
+	css({ paddingTop: 12 })()
+	const refined = css({ padding: 4, variants: { tall: { true: { paddingTop: 12 } } } })
+
+	const reset = css({ paddingTop: 8, variants: { flat: { true: { padding: 0 } } } })
+
+	// a breakpoint value in the base, then an unconditional variant declared later: the variant wins, as in 'declared'
+	const responsive = css({ '@wide': { color: 'rgb(3, 3, 3)' }, variants: { plain: { true: { color: 'rgb(4, 4, 4)' } } } })
+
+	return JSON.stringify({
+		extension: resolve(child().className, 'color'),
+		refinedTop: resolve(refined({ tall: true }).className, 'paddingTop'),
+		refinedLeft: resolve(refined({ tall: true }).className, 'paddingLeft'),
+		reset: resolve(reset({ flat: true }).className, 'paddingTop'),
+		breakpoint: resolve(responsive({ plain: true }).className, 'color'),
+	})
+}`
+
+{
+	const page = await browser.newPage()
+	await page.setContent('<!doctype html><html><body></body></html>')
+	await page.addScriptTag({ path: globalBuild })
+	const actual = await page.evaluate(`(${atomicCase})()`)
+	const expected = JSON.stringify({ extension: 'rgb(2, 2, 2)', refinedTop: '12px', refinedLeft: '4px', reset: '0px', breakpoint: 'rgb(4, 4, 4)' })
+	await page.close()
+
+	checked++
+	console.log('atomic output')
+	if (actual === expected) {
+		console.log('  ok   each element resolves to what the render-time merge decided')
+	} else {
+		failures.push(`atomic: each element resolves to what the render-time merge decided\n    expected ${expected}\n    actual   ${JSON.stringify(actual)}`)
+		console.log('  FAIL atomic: each element resolves to what the render-time merge decided')
+	}
+}
+
+/**
+ * Atomic output against the declared cascade, element by element, in a real browser: every variant
+ * combination of a three-level composition, rendered forwards in one page with `cascade: 'declared'`
+ * and backwards in another with `atomic: true`, must resolve to the same computed styles. The fixture
+ * mixes shorthands and longhands in both orders, compound variants, the `css` prop, and responsive
+ * props whose breakpoint values compete with later unconditional variants. It leaves out the one
+ * documented difference (two different breakpoints, declared against `config.media` order), so any
+ * difference here is a bug.
+ */
+const differentialCase = `(mode) => {
+	const { css } = stitches.createStitches(mode === 'atomic' ? { atomic: true, media: { md: '(min-width: 1px)' } } : { cascade: 'declared', media: { md: '(min-width: 1px)' } })
+
+	const base = css({
+		color: 'rgb(1, 1, 1)', padding: 4, borderTop: '1px solid',
+		variants: {
+			tone: { a: { color: 'rgb(2, 2, 2)' }, b: { color: 'rgb(3, 3, 3)', paddingTop: 10 } },
+			flat: { true: { padding: 0 } },
+			size: { s: { fontWeight: 300 }, l: { fontWeight: 700, borderTopWidth: 3 } },
+		},
+		compoundVariants: [{ tone: 'b', size: 'l', css: { opacity: 0.5, paddingLeft: 7 } }],
+		defaultVariants: { tone: 'a' },
+	})
+	const extended = css(base, { color: 'rgb(4, 4, 4)', variants: { tone: { c: { color: 'rgb(5, 5, 5)', margin: 2 } }, quiet: { true: { opacity: 0.8, borderTopStyle: 'dashed' } } } })
+	const deepest = css(extended, { paddingTop: 1, variants: { size: { l: { padding: 3 } } } })
+
+	const cases = []
+	for (const [name, component] of [['base', base], ['extended', extended], ['deepest', deepest]]) {
+		for (const tone of [undefined, 'a', 'b', 'c', { '@initial': 'a', '@md': 'b' }]) for (const flat of [undefined, true]) for (const size of [undefined, 's', 'l', { '@initial': 's', '@md': 'l' }]) for (const quiet of [undefined, true]) for (const override of [undefined, { color: 'rgb(9, 9, 9)', paddingLeft: 5 }]) {
+			cases.push([JSON.stringify({ name, tone, flat, size, quiet, override }), component, { tone, flat, size, quiet, css: override }])
+		}
+	}
+	if (mode === 'atomic') cases.reverse()
+
+	const properties = ['color', 'padding-top', 'padding-left', 'margin-top', 'border-top-width', 'border-top-style', 'font-weight', 'opacity']
+	const resolved = {}
+	for (const [key, component, props] of cases) {
+		const element = document.createElement('div')
+		element.className = component(props).className
+		document.body.appendChild(element)
+		const computed = getComputedStyle(element)
+		resolved[key] = properties.map((property) => computed.getPropertyValue(property)).join('|')
+	}
+	return JSON.stringify(resolved)
+}`
+
+{
+	const resolveIn = async (mode: 'declared' | 'atomic'): Promise<Record<string, string>> => {
+		const page = await browser.newPage()
+		await page.setContent('<!doctype html><html><body></body></html>')
+		await page.addScriptTag({ path: globalBuild })
+		const result = await page.evaluate(`(${differentialCase})(${JSON.stringify(mode)})`)
+		await page.close()
+		return typeof result === 'string' ? JSON.parse(result) : {}
+	}
+
+	const declared = await resolveIn('declared')
+	const atomic = await resolveIn('atomic')
+	const keys = Object.keys(declared)
+	const differing = keys.filter((key) => declared[key] !== atomic[key])
+
+	checked++
+	if (keys.length > 0 && keys.length === Object.keys(atomic).length && differing.length === 0) {
+		console.log(`  ok   atomic output resolves like the declared cascade, ${keys.length} elements`)
+	} else {
+		failures.push(
+			`atomic vs declared: ${differing.length} of ${keys.length} elements differ\n` +
+				differing
+					.slice(0, 5)
+					.map((key) => `    ${key}\n      declared ${declared[key]}\n      atomic   ${atomic[key]}`)
+					.join('\n'),
+		)
+		console.log(`  FAIL atomic output resolves like the declared cascade (${differing.length} of ${keys.length} differ)`)
+	}
+}
+
 await browser.close()
 
 if (failures.length) {

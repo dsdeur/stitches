@@ -9,7 +9,7 @@ import { createGlobalCssFunction } from './features/globalCss.ts'
 import { createKeyframesFunction } from './features/keyframes.ts'
 import { createCreateThemeFunction } from './features/createTheme.ts'
 
-import { createSheet } from './sheet.ts'
+import { createSheet, declaredLayout, legacyLayout, toAtomicNames } from './sheet.ts'
 
 type SheetRoot = NonNullable<StitchesInit['root']>
 
@@ -49,9 +49,11 @@ const createInstance = (initConfig: Omit<StitchesInit, 'root'>, root: SheetRoot 
 	const themeMap = initConfig.themeMap ?? { ...defaultThemeMap }
 	const utils = initConfig.utils ?? {}
 
-	const config: StitchesConfig = { prefix, cascade, media, theme, themeMap, utils }
+	const atomic = initConfig.atomic ?? false
 
-	const sheet = createSheet(root, cascade)
+	const config: StitchesConfig = { prefix, cascade, atomic, media, theme, themeMap, utils }
+
+	const sheet = createSheet(root, atomic ? { names: toAtomicNames(Object.keys(media).length), keyed: true } : cascade === 'declared' ? declaredLayout : legacyLayout)
 
 	const returnValue: StitchesInstance = {
 		css: createCssFunction(config, sheet),
