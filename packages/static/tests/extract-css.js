@@ -194,6 +194,53 @@ describe('extractCss', () => {
 		expect(withoutMarkers(rendered.getCssText()).replace(/rendered-/g, '')).toBe(cssText)
 	})
 
+	test('walks four levels into plain objects, and leaves anything deeper to the runtime', () => {
+		const stitches = createCoreStitches({ root: null })
+		const at = (depth, value) => (depth === 0 ? value : { nested: at(depth - 1, value) })
+
+		const reached = stitches.css({ color: 'teal' })
+		const tooDeep = stitches.css({ color: 'olive' })
+		const cssText = extractCss(stitches, [at(4, reached), at(5, tooDeep)])
+
+		expect(cssText).toContain('{color:teal}')
+		expect(cssText).not.toContain('{color:olive}')
+	})
+
+	test('a keyframes value exported on its own is written even if no style names it', () => {
+		const stitches = createCoreStitches({ root: null })
+		const pulse = stitches.keyframes({ '50%': { opacity: 0.5 } })
+
+		expect(extractCss(stitches, [{ pulse }])).toContain(`@keyframes ${pulse.name}{50%{opacity:0.5}}`)
+	})
+
+	for (const cascade of ['legacy', 'declared']) {
+		test(`${cascade}: with a prefix, utils and tokens, the file still hydrates without a single injection`, () => {
+			const config = {
+				cascade,
+				media,
+				prefix: 'app',
+				theme: { colors: { brand: 'tomato' }, space: { 1: '4px', 2: '8px' } },
+				utils: { px: (value) => ({ paddingLeft: value, paddingRight: value }) },
+			}
+			const define = ({ css }) => ({
+				chip: css({ px: '$1', color: '$brand', variants: { size: { lg: { px: '$2' } }, outline: { true: { border: '1px solid $brand' } } }, compoundVariants: [{ size: 'lg', outline: true, css: { borderWidth: 2 } }] }),
+			})
+
+			const server = createCoreStitches({ ...config, root: null })
+			const extracted = extractCss(server, [define(server)])
+			expect(extracted).toContain('.app-c-')
+			expect(extracted).toContain('padding-left:var(--app-space-1)')
+
+			const client = createCoreStitches({ ...config, root: toHydratingRoot(extracted) })
+			const { chip } = define(client)
+			chip({ size: { '@bp1': 'lg' }, outline: true })
+			chip({ size: 'lg', outline: { '@bp2': true } })
+			chip({ size: { '@bp2': 'lg' }, outline: { '@bp2': true } })
+
+			expect(client.getCssText()).toBe(extracted)
+		})
+	}
+
 	test('leaves ordinary values alone and survives cycles', () => {
 		const stitches = createCoreStitches({ root: null })
 		const cyclic = { label: (text) => text }

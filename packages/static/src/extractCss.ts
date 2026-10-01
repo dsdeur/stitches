@@ -4,8 +4,10 @@ import { internal } from '../../core/src/utility/internal.ts'
 export interface ExtractOptions {
 	/**
 	 * Also render every variant value, and every compound variant, at each breakpoint in
-	 * `config.media`, so `size={{ '@bp2': 'large' }}` finds its rule in the file. On by default.
-	 * A value placed at two breakpoints at once is its own class and is still injected at runtime.
+	 * `config.media`, so `size={{ '@bp2': 'large' }}` finds its rule in the file. For a compound
+	 * variant, every mix of its conditions at one breakpoint and the rest plain. On by default.
+	 * A value placed at two breakpoints at once, or a compound whose conditions hold at different
+	 * breakpoints, is its own class and is still injected at runtime.
 	 */
 	readonly responsive?: boolean
 }
@@ -68,8 +70,16 @@ const toPropSets = (composers: Iterable<ComposerTuple>, mediaNames: readonly str
 
 			if (!responsive) continue
 
-			// All conditions at the same breakpoint: the combination a responsive compound is written for.
-			for (const media of mediaNames) add(Object.fromEntries(Object.entries(match).map(([name, value]) => [name, { [`@${media}`]: value }])))
+			// Each non-empty subset of the conditions at one breakpoint, the rest plain: `size="lg"` with
+			// `outline={{ '@bp2': true }}` is its own class, as is both at `@bp2`. Compound variants name
+			// few conditions, so this stays a handful of renders per breakpoint.
+			const conditions = Object.entries(match)
+
+			for (const media of mediaNames) {
+				for (let subset = 1; subset < 1 << conditions.length; subset++) {
+					add(Object.fromEntries(conditions.map(([name, value], index) => [name, subset & (1 << index) ? { [`@${media}`]: value } : value])))
+				}
+			}
 		}
 	}
 
