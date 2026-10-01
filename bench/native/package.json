@@ -5,7 +5,9 @@
   "main": "index.js",
   "description": "Measures what @stitches/native costs in a real React Native app, against no styling and StyleSheet. Not part of the workspaces; see README.md.",
   "scripts": {
-    "bench": "node run.mjs"
+    "bench": "node run.mjs",
+    "android": "expo run:android",
+    "ios": "expo run:ios"
   },
   "dependencies": {
     "@stitches/native": "file:./.stitches/native",
