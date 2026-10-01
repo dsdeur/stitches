@@ -107,6 +107,8 @@ export interface SheetGroup {
 	/** Texts of the `@import` rules written straight to the sheet, in insertion order. They precede every group. */
 	imports: string[]
 	rules: Record<string, RuleGroup>
+	/** Incremented by every reset(), so anything that remembers what was injected can tell its memory is stale. */
+	generation: number
 	reset: () => void
 	toString: () => string
 }

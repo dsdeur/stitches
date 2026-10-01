@@ -245,6 +245,14 @@ const createRenderer = (config: StitchesConfig, internals: ResolvedInternals, sh
 	 */
 	const mergedBySelection = new Map<string, readonly Atom[]>()
 
+	/**
+	 * The classes each variant selection renders to, base and variants (and atoms), before the `css`
+	 * prop and the `className` prop. Rendering is a pure function of the selection once its rules are
+	 * in the sheet, so a warm render with the same props skips matching and injection entirely. An
+	 * entry is only trusted for the sheet generation it was made in: reset() empties the sheet.
+	 */
+	const renderMemo = new Map<string, { readonly generation: number; readonly classes: readonly string[] }>()
+
 	let renderedOnce = false
 
 	const render = (props?: CssProps): RenderResult => {
@@ -257,6 +265,12 @@ const createRenderer = (config: StitchesConfig, internals: ResolvedInternals, sh
 		type VariantPropValue = string | Record<string, string>
 		const variantProps: Record<string, VariantPropValue> = {}
 
+		/**
+		 * The selection as one string. Each prop is marked by kind, a plain value with \u0001 and a
+		 * responsive one (an object) with \u0002 and its JSON, so the two can never read the same.
+		 */
+		let selectionKey = ''
+
 		for (const name in prefilledVariants) {
 			if (name in props) {
 				if (!shouldForwardStitchesProp?.(name)) delete forwardProps[name]
@@ -267,103 +281,120 @@ const createRenderer = (config: StitchesConfig, internals: ResolvedInternals, sh
 						'@initial': prefilledVariants[name],
 						...(data as Record<string, string>),
 					}
+					selectionKey += `\u0002${JSON.stringify(data)}`
 				} else {
 					const strData = String(data)
+					const value = strData === 'undefined' && !undefinedVariants.has(name) ? prefilledVariants[name] : strData
 
-					variantProps[name] = strData === 'undefined' && !undefinedVariants.has(name) ? prefilledVariants[name] : strData
+					variantProps[name] = value
+					selectionKey += `\u0001${value}`
 				}
 			} else {
 				variantProps[name] = prefilledVariants[name]
+				selectionKey += `\u0001${prefilledVariants[name]}`
 			}
 		}
 
-		const classSet = new Set([...baseClassNames])
+		const cssStyles = typeof forwardProps.css === 'object' && forwardProps.css ? forwardProps.css : null
 
-		/** Atomic output: what applies, collected in place of injecting, then merged in the declared order below. */
-		const pieces: AtomicPiece[] | null = config.atomic ? [] : null
+		if (cssStyles && !shouldForwardStitchesProp?.('css')) delete forwardProps.css
 
-		// Composers are visited base-first, so the position in the set is the composition depth.
-		let depth = baseDepth
-		let composerIndex = 0
+		// In atomic output the `css` prop merges with everything else, so only a render without one is memoized there.
+		const memoKey = config.atomic && cssStyles ? null : selectionKey
+		const memo = memoKey === null ? undefined : renderMemo.get(memoKey)
 
-		for (const [composerBaseClass, composerBaseStyle, singularVariants, compoundVariants] of internals.composers) {
-			if (pieces) pieces.push([depth, 0, 0, composerBaseClass, composerBaseStyle])
-			else inject('styled', depth, composerBaseClass, composerBaseStyle, 0)
+		let classSet: Set<string>
 
-			const singularVariantsToAdd = getTargetVariantsToAdd(singularVariants, composerHomes[composerIndex], depth, variantProps, config.media, mediaOrder)
-			const compoundVariantsToAdd = getTargetVariantsToAdd(compoundVariants, null, depth, variantProps, config.media, mediaOrder, true)
+		if (memo && memo.generation === sheet.generation) {
+			classSet = new Set(memo.classes)
+		} else {
+			classSet = new Set(baseClassNames)
 
-			for (const variantToAdd of singularVariantsToAdd) {
-				if (variantToAdd === undefined) continue
+			/** Atomic output: what applies, collected in place of injecting, then merged in the declared order below. */
+			const pieces: AtomicPiece[] | null = config.atomic ? [] : null
 
-				for (const [vClass, vStyle, isResponsive, vHash, sortKey, groupDepth] of variantToAdd) {
-					const variantClassName = `${composerBaseClass}-${vHash}-${vClass}`
+			// Composers are visited base-first, so the position in the set is the composition depth.
+			let depth = baseDepth
+			let composerIndex = 0
 
-					if (pieces) {
-						pieces.push([groupDepth, 1, sortKey, variantClassName, vStyle])
-						continue
+			for (const [composerBaseClass, composerBaseStyle, singularVariants, compoundVariants] of internals.composers) {
+				if (pieces) pieces.push([depth, 0, 0, composerBaseClass, composerBaseStyle])
+				else inject('styled', depth, composerBaseClass, composerBaseStyle, 0)
+
+				const singularVariantsToAdd = getTargetVariantsToAdd(singularVariants, composerHomes[composerIndex], depth, variantProps, config.media, mediaOrder)
+				const compoundVariantsToAdd = getTargetVariantsToAdd(compoundVariants, null, depth, variantProps, config.media, mediaOrder, true)
+
+				for (const variantToAdd of singularVariantsToAdd) {
+					if (variantToAdd === undefined) continue
+
+					for (const [vClass, vStyle, isResponsive, vHash, sortKey, groupDepth] of variantToAdd) {
+						const variantClassName = `${composerBaseClass}-${vHash}-${vClass}`
+
+						if (pieces) {
+							pieces.push([groupDepth, 1, sortKey, variantClassName, vStyle])
+							continue
+						}
+
+						classSet.add(variantClassName)
+
+						inject(isResponsive ? 'resonevar' : 'onevar', groupDepth, variantClassName, vStyle, sortKey)
 					}
+				}
 
-					classSet.add(variantClassName)
+				for (const variantToAdd of compoundVariantsToAdd) {
+					if (variantToAdd === undefined) continue
 
-					inject(isResponsive ? 'resonevar' : 'onevar', groupDepth, variantClassName, vStyle, sortKey)
+					for (const [vClass, vStyle, , vHash, sortKey, groupDepth] of variantToAdd) {
+						const variantClassName = `${composerBaseClass}-${vHash}-${vClass}`
+
+						if (pieces) {
+							pieces.push([groupDepth, 2, sortKey, variantClassName, vStyle])
+							continue
+						}
+
+						classSet.add(variantClassName)
+
+						inject('allvar', groupDepth, variantClassName, vStyle, sortKey)
+					}
+				}
+
+				++depth
+				++composerIndex
+			}
+
+			if (pieces) {
+				if (cssStyles) pieces.push([Number.POSITIVE_INFINITY, 3, 0, `${baseClassName}-i${toHash(cssStyles)}-css`, cssStyles])
+
+				const selection = pieces.map((piece) => piece[3]).join(' ')
+				let atoms = mergedBySelection.get(selection)
+
+				if (!atoms) {
+					// Array.prototype.sort is stable, so pieces with equal positions keep the order they were found in.
+					pieces.sort(([depthA, kindA, keyA], [depthB, kindB, keyB]) => depthA - depthB || kindA - kindB || keyA - keyB)
+
+					const merged = new Map<string, Atom>()
+
+					for (const [, , , cacheKey, style] of pieces) mergeAtoms(merged, atomsOf(cacheKey, style), config)
+
+					mergedBySelection.set(selection, (atoms = [...merged.values()]))
+				}
+
+				for (const atom of atoms) {
+					injectAtom(atom)
+					classSet.add(atom.className)
 				}
 			}
 
-			for (const variantToAdd of compoundVariantsToAdd) {
-				if (variantToAdd === undefined) continue
-
-				for (const [vClass, vStyle, , vHash, sortKey, groupDepth] of variantToAdd) {
-					const variantClassName = `${composerBaseClass}-${vHash}-${vClass}`
-
-					if (pieces) {
-						pieces.push([groupDepth, 2, sortKey, variantClassName, vStyle])
-						continue
-					}
-
-					classSet.add(variantClassName)
-
-					inject('allvar', groupDepth, variantClassName, vStyle, sortKey)
-				}
-			}
-
-			++depth
-			++composerIndex
+			if (memoKey !== null) renderMemo.set(memoKey, { generation: sheet.generation, classes: [...classSet] })
 		}
 
-		// apply css property styles
-		if (typeof forwardProps.css === 'object' && forwardProps.css) {
-			const cssStyles = forwardProps.css
-			if (!shouldForwardStitchesProp?.('css')) delete forwardProps.css
+		// apply css property styles (atomic output merged them above)
+		if (cssStyles && !config.atomic) {
 			const iClass = `${baseClassName}-i${toHash(cssStyles)}-css`
 
-			if (pieces) pieces.push([Number.POSITIVE_INFINITY, 3, 0, iClass, cssStyles])
-			else {
-				classSet.add(iClass)
+			classSet.add(iClass)
 
-				inject('inline', 0, iClass, cssStyles, 0)
-			}
-		}
-
-		if (pieces) {
-			const selection = pieces.map((piece) => piece[3]).join(' ')
-			let atoms = mergedBySelection.get(selection)
-
-			if (!atoms) {
-				// Array.prototype.sort is stable, so pieces with equal positions keep the order they were found in.
-				pieces.sort(([depthA, kindA, keyA], [depthB, kindB, keyB]) => depthA - depthB || kindA - kindB || keyA - keyB)
-
-				const merged = new Map<string, Atom>()
-
-				for (const [, , , cacheKey, style] of pieces) mergeAtoms(merged, atomsOf(cacheKey, style), config)
-
-				mergedBySelection.set(selection, (atoms = [...merged.values()]))
-			}
-
-			for (const atom of atoms) {
-				injectAtom(atom)
-				classSet.add(atom.className)
-			}
+			inject('inline', 0, iClass, cssStyles, 0)
 		}
 
 		for (const propClassName of String(props.className || '')
