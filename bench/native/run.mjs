@@ -84,8 +84,11 @@ const isRunning = (pid) => {
 	}
 }
 
-/** Waits for the app to post its results, and stops waiting when the app exits without doing so. */
-const receiveResults = (timeoutMs) => {
+/**
+ * Serves one launch: tells the app which scenario to run, then waits for it to post the samples,
+ * and stops waiting when the app exits without doing so.
+ */
+const serveLaunch = (implementation, timeoutMs) => {
 	let watchedPid
 	const results = new Promise((resolve, reject) => {
 		const finish = (settle, value) => {
@@ -95,6 +98,11 @@ const receiveResults = (timeoutMs) => {
 			settle(value)
 		}
 		const server = createServer((request, response) => {
+			if (request.method === 'GET' && request.url === '/config') {
+				response.setHeader('content-type', 'application/json')
+				response.end(JSON.stringify({ implementation }))
+				return
+			}
 			let body = ''
 			request.on('data', (chunk) => (body += chunk))
 			request.on('end', () => {
@@ -112,17 +120,43 @@ const receiveResults = (timeoutMs) => {
 	return { results, watch: (pid) => (watchedPid = pid) }
 }
 
-const format = (ms) => ms.toFixed(2).padStart(7)
+/** Runs one scenario in a fresh process of the installed app and returns its samples. */
+const runScenario = async (device, implementation) => {
+	terminate(device)
+	const { results, watch } = serveLaunch(implementation, 10 * 60 * 1000)
+	// prints "dev.stitches.bench: <pid>"
+	const launched = execFileSync('xcrun', ['simctl', 'launch', device.udid, 'dev.stitches.bench'], { encoding: 'utf8' }).trim()
+	watch(Number(launched.split(': ').pop()))
+	const received = await results
+	terminate(device)
+	return received
+}
 
-const report = (mode, { count, rounds, results }) => {
-	console.log(`\nReact Compiler ${mode}: ${count} cards, median of ${rounds} rounds, milliseconds from state change`)
-	for (const operation of ['mount', 'update', 'theme']) {
-		console.log(`\n  ${operation.padEnd(10)}   commit     frame    styling share of commit`)
-		const floor = results.none[operation].commit
-		for (const [name, timings] of Object.entries(results)) {
-			const { commit, frame } = timings[operation]
-			const share = name === 'none' ? '' : `${(((commit - floor) / commit) * 100).toFixed(0).padStart(3)}%  (+${(commit - floor).toFixed(2)} ms over no styling)`
-			console.log(`  ${name.padEnd(10)} ${format(commit)} ${format(frame)}    ${share}`)
+const scenarios = ['none', 'stylesheet', 'styled', 'useStyle', 'compiled']
+const operations = ['mount', 'update', 'theme']
+
+const quantile = (values, q) => {
+	const sorted = [...values].sort((a, b) => a - b)
+	return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * q))]
+}
+
+const format = (ms) => ms.toFixed(2).padStart(6)
+const signed = (ms) => `${ms >= 0 ? '+' : '-'}${Math.abs(ms).toFixed(2)}`.padStart(7)
+
+const report = (mode, samples, count) => {
+	const runs = samples.none.mount.length
+	console.log(`\nReact Compiler ${mode}: ${count} cards, ${runs} samples per cell (each scenario in its own launches), ms from state change`)
+	for (const operation of operations) {
+		console.log(`\n  ${operation.padEnd(10)}  commit (p25–p75)        frame    vs StyleSheet   vs none`)
+		const commitOf = (name) => quantile(samples[name][operation].map((value) => value.commit), 0.5)
+		for (const name of scenarios) {
+			const values = samples[name][operation]
+			const commits = values.map((value) => value.commit)
+			const commit = quantile(commits, 0.5)
+			const frame = quantile(values.map((value) => value.frame), 0.5)
+			const spread = `(${format(quantile(commits, 0.25))}–${format(quantile(commits, 0.75)).trim()})`.padEnd(16)
+			const versus = (other) => (name === other ? '       ' : signed(commit - commitOf(other)))
+			console.log(`  ${name.padEnd(10)} ${format(commit)} ${spread} ${format(frame)}        ${versus('stylesheet')}   ${versus('none')}`)
 		}
 	}
 }
@@ -133,6 +167,9 @@ run('npm', ['install', '--no-audit', '--no-fund', '--loglevel=error'])
 const device = pickSimulator()
 console.log(`simulator: ${device.name} (${device.udid})`)
 mkdirSync(join(here, 'results'), { recursive: true })
+
+// each scenario twice, the second pass in reverse order, so drift over the run lands on all of them
+const passes = [scenarios, [...scenarios].reverse()]
 
 for (const mode of modes) {
 	const env = { BENCH_COMPILER: mode === 'on' ? '1' : '0' }
@@ -147,16 +184,20 @@ for (const mode of modes) {
 	const app = buildApp(device, env)
 
 	// installed and launched with simctl, which needs no Simulator window: the run works over SSH
-	const { results, watch } = receiveResults(15 * 60 * 1000)
 	terminate(device)
 	run('xcrun', ['simctl', 'install', device.udid, app])
-	// prints "dev.stitches.bench: <pid>"
-	const launched = execFileSync('xcrun', ['simctl', 'launch', device.udid, 'dev.stitches.bench'], { encoding: 'utf8' }).trim()
-	console.log(launched)
-	watch(Number(launched.split(': ').pop()))
 
-	const received = await results
-	terminate(device)
-	writeFileSync(join(here, 'results', `${mode}.json`), `${JSON.stringify(received, null, 2)}\n`)
-	report(mode, received)
+	const samples = Object.fromEntries(scenarios.map((name) => [name, { mount: [], update: [], theme: [] }]))
+	let count
+	for (const pass of passes) {
+		for (const name of pass) {
+			console.log(`  running ${name}`)
+			const received = await runScenario(device, name)
+			count = received.count
+			for (const operation of operations) samples[name][operation].push(...received.samples[operation])
+		}
+	}
+
+	writeFileSync(join(here, 'results', `${mode}.json`), `${JSON.stringify({ count, samples }, null, 2)}\n`)
+	report(mode, samples, count)
 }

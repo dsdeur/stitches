@@ -1,9 +1,11 @@
-// Runs every scenario in the real runtime (Hermes, Fabric) and posts the timings to run.mjs.
+// Runs one scenario in the real runtime (Hermes, Fabric) and posts its timings to run.mjs, which
+// says which scenario to run. One scenario per launch: the scenarios render the same text, and
+// native caches (text measurement above all) would otherwise let whichever runs first pay for the
+// ones after it.
 //
 // Each operation is timed from the state change to the moment React has committed it, which on
 // Fabric includes building the native shadow tree on the JavaScript thread ("commit"), and to the
-// next frame after that ("frame"). Rounds alternate the order of the implementations, and the first
-// round is a warm-up that is not recorded.
+// next frame after that ("frame"). The first round is a warm-up that is not recorded.
 import { useLayoutEffect, useRef, useState } from 'react'
 import { ScrollView, Text, View } from 'react-native'
 import { dark, Provider, theme } from './cards'
@@ -15,7 +17,7 @@ import * as useStyle from './useStyle'
 import * as compiled from './compiled'
 
 const implementations = { none, stylesheet, styled, useStyle, compiled }
-const names = Object.keys(implementations)
+const runner = 'http://localhost:8799'
 const count = 400
 const rounds = 11
 
@@ -49,11 +51,6 @@ const Probe = ({ step, onCommit }) => {
 }
 
 const nextFrame = () => new Promise((resolve) => requestAnimationFrame(() => resolve(performance.now())))
-
-const median = (values) => {
-	const sorted = [...values].sort((a, b) => a - b)
-	return sorted[Math.floor(sorted.length / 2)]
-}
 
 export const App = () => {
 	const [state, setState] = useState({ step: 0, implementation: null, generation: 0, themeName: 'light' })
@@ -91,41 +88,30 @@ export const App = () => {
 		started.current = true
 
 		const run = async () => {
-			const samples = Object.fromEntries(names.map((name) => [name, { mount: [], update: [], theme: [] }]))
+			const { implementation } = await (await fetch(`${runner}/config`)).json()
+			if (!(implementation in implementations)) throw new Error(`unknown scenario ${implementation}`)
+			const samples = { mount: [], update: [], theme: [] }
 
 			for (let round = 0; round < rounds; round++) {
-				setStatus(`round ${round + 1} of ${rounds}`)
-				const order = round % 2 ? [...names].reverse() : names
-
-				for (const name of order) {
-					const record = (operation, timing) => {
-						if (round > 0) samples[name][operation].push(timing)
-					}
-
-					record('mount', await measure((previous) => ({ ...previous, implementation: name, themeName: 'light' })))
-					for (let update = 0; update < 3; update++) record('update', await measure((previous) => ({ ...previous, generation: previous.generation + 1 })))
-					for (let toggle = 0; toggle < 2; toggle++) record('theme', await measure((previous) => ({ ...previous, themeName: previous.themeName === 'light' ? 'dark' : 'light' })))
-					await measure((previous) => ({ ...previous, implementation: null }))
+				setStatus(`${implementation}: round ${round + 1} of ${rounds}`)
+				const record = (operation, timing) => {
+					if (round > 0) samples[operation].push(timing)
 				}
-			}
 
-			const results = {}
-			for (const name of names) {
-				results[name] = {}
-				for (const operation of ['mount', 'update', 'theme']) {
-					const values = samples[name][operation]
-					results[name][operation] = { commit: median(values.map((value) => value.commit)), frame: median(values.map((value) => value.frame)), samples: values.length }
-				}
+				record('mount', await measure((previous) => ({ ...previous, implementation, themeName: 'light' })))
+				for (let update = 0; update < 3; update++) record('update', await measure((previous) => ({ ...previous, generation: previous.generation + 1 })))
+				for (let toggle = 0; toggle < 2; toggle++) record('theme', await measure((previous) => ({ ...previous, themeName: previous.themeName === 'light' ? 'dark' : 'light' })))
+				await measure((previous) => ({ ...previous, implementation: null }))
 			}
 
 			setStatus('posting results')
-			await fetch('http://localhost:8799/results', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ count, rounds: rounds - 1, results }) })
+			await fetch(`${runner}/results`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ implementation, count, samples }) })
 			setStatus('done')
 		}
 
 		run().catch((error) => {
 			setStatus(`failed: ${error.message}`)
-			fetch('http://localhost:8799/results', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ error: String(error.stack ?? error) }) })
+			fetch(`${runner}/results`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ error: String(error.stack ?? error) }) })
 		})
 	}, [])
 
