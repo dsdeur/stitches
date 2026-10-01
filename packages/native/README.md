@@ -65,7 +65,7 @@ second entry, with `react` as an optional peer:
 import { createStitches } from '@stitches/native/react'
 import { Text, View, useColorScheme, useWindowDimensions } from 'react-native'
 
-const { styled, Provider, createTheme, theme, useTheme } = createStitches({
+const { styled, Provider, createTheme, theme, useTheme, useStyle } = createStitches({
   theme: { colors: { background: 'white', text: '#0c0c11' }, space: { 1: '4px', 2: '8px' } },
   media: { tablet: '(min-width: 768px)' },
 })
@@ -96,6 +96,36 @@ export const App = () => (
   integration: this package never imports `react-native`.
 - `useTheme()` returns the nearest provider's resolved theme, for a value that is not a style (an
   icon colour, a chart).
+- `useStyle(card, props)` resolves a `css()` function under the nearest provider, without adding a
+  component to the tree: `<View style={useStyle(card, { size })} />`.
+
+## Performance
+
+Native has no stylesheet to amortise into, so every render pays for its style. The design goal is
+that this payment is a lookup, not work:
+
+- Each style function caches its result per theme, per set of matching breakpoints and per variant
+  selection, in a tree keyed by the prop values themselves. A warm lookup is a handful of `Map`
+  reads, about 50 ns, and returns **the same object** each time, so React Native can skip diffing it.
+- Breakpoints are evaluated once per window size, by the `Provider`, not by each component.
+- `styled()` reads its variants straight from its props and makes the one copy of the props any
+  wrapper makes (to leave the variants out).
+
+Measured with `docs/bench/native-render.mts` (production React, 1000 cards rendered 21 times,
+interleaved), against a component that passes a style object computed once by hand:
+
+|                                         | added per card render     | vs hand-computed |
+| --------------------------------------- | ------------------------- | ---------------- |
+| a bare `forwardRef` wrapper, no styling | within noise, under 20 ns | 0–4%             |
+| `useStyle(card, props)`                 | 60–85 ns                  | 10–15%           |
+| `styled(View, …)`                       | 60–85 ns                  | 10–15%           |
+
+Before the cache tree and the per-window breakpoints (same benchmark): `styled` added about 1.3 µs
+per card, +219%.
+
+The percentages are against server rendering, which is far cheaper per element than a real React
+Native host view, so on a device the share is smaller; the absolute cost is the number to watch.
+For a long list, `useStyle` adds no component to the tree at all.
 
 ## Responsive values
 

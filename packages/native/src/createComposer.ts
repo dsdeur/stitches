@@ -24,7 +24,7 @@ const isStyleObject = (value: unknown): value is StyleObject => isRecord(value)
  * `@initial` value sets survives a breakpoint whose value leaves it alone; merging them in that
  * order does the same here. `@initial` defaults to the default variant, as it does on the web.
  */
-export const toSelection = (composers: readonly Composer[], props: object, media: MediaContext): Map<string, readonly string[]> => {
+export const toSelection = (composers: readonly Composer[], variantNames: readonly string[], props: { readonly [key: string]: unknown }, media: MediaContext): Map<string, readonly string[]> => {
 	const defaults = new Map<string, string>()
 
 	for (const composer of composers) {
@@ -35,7 +35,10 @@ export const toSelection = (composers: readonly Composer[], props: object, media
 
 	for (const [variant, value] of defaults) selection.set(variant, [value])
 
-	for (const [variant, value] of Object.entries(props)) {
+	// Only declared variants: a styled component hands over all of its props, children and handlers included.
+	for (const variant of variantNames) {
+		const value = props[variant]
+
 		if (value === undefined || value === null) continue
 
 		if (!isRecord(value)) {
@@ -105,9 +108,17 @@ const applyComposer = (composer: Composer, selection: ReadonlyMap<string, readon
  * one, its variants included. `styled(Base, { color })` therefore overrides a `color` that Base
  * sets in a variant — the case that needs `!important` under the web's legacy cascade.
  */
-export const render = (composers: readonly Composer[], props: object, theme: ThemeValues, themeMap: { readonly [property: string]: string }, media: MediaContext, overrides?: StyleObject): NativeStyle => {
+export const render = (
+	composers: readonly Composer[],
+	variantNames: readonly string[],
+	props: { readonly [key: string]: unknown },
+	theme: ThemeValues,
+	themeMap: { readonly [property: string]: string },
+	media: MediaContext,
+	overrides?: StyleObject,
+): NativeStyle => {
 	const context: StyleContext = { theme, themeMap, media }
-	const selection = toSelection(composers, props, media)
+	const selection = toSelection(composers, variantNames, props, media)
 	const style: NativeStyle = {}
 
 	for (const composer of composers) applyComposer(composer, selection, context, style)

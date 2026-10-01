@@ -63,6 +63,21 @@ describe('responsive values', () => {
 		expect(css({ 'opacity': 1, '@media (orientation: landscape)': { opacity: 0.5 } })({}, undefined, desktop)).toEqual({ opacity: 0.5 })
 	})
 
+	test('alternating between window sizes gives the right style each time', () => {
+		for (const viewport of [phone, desktop, phone, tablet, desktop, tablet]) {
+			const expected = viewport === phone ? 4 : viewport === tablet ? 8 : 16
+			expect(box({}, undefined, viewport).padding).toBe(expected)
+		}
+	})
+
+	test('a responsive prop and a plain string that reads the same are different selections', () => {
+		const odd = css({ variants: { mode: { '{"@initial":"a"}': { opacity: 0.5 }, 'a': { opacity: 1 } } } })
+
+		expect(odd({ mode: { '@initial': 'a' } })).toEqual({ opacity: 1 })
+		expect(odd({ mode: '{"@initial":"a"}' })).toEqual({ opacity: 0.5 })
+		expect(odd({ mode: { '@initial': 'a' } })).toEqual({ opacity: 1 })
+	})
+
 	test('the same breakpoints give the same object, and a different breakpoint a different one', () => {
 		const wide = { width: 1300, height: 900 }
 

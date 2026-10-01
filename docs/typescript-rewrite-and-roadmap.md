@@ -374,6 +374,12 @@ sets survives a breakpoint that leaves it alone, and a compound applies while ea
 is active. Style objects are cached per breakpoint signature, so identity holds while the window
 stays within one set of breakpoints.
 
+Performance, 2026-10-01 (`docs/bench/native-render.mts`, production React): a warm style lookup is
+about 50 ns and returns the same object for the same theme, breakpoints and variants; `styled` and
+the new `useStyle` hook add 60–85 ns per render over a hand-computed style object (it was 1.3 µs per
+render before the cache was rebuilt as a tree keyed by prop values and breakpoints moved to the
+Provider). The rule for this package: a warm render is a lookup, never style work.
+
 Still open, as listed above: native `utils`, RN property names in the types, and `withConfig`
 (`shouldForwardStitchesProp`) for variants that share a name with a component prop.
 

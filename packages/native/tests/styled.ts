@@ -34,7 +34,7 @@ const hostProps = (element: React.ReactElement): Record<string, unknown> => {
 }
 
 describe('styled for React Native', () => {
-	const { styled, Provider, createTheme, useTheme } = createStitches(config)
+	const { styled, Provider, createTheme, useTheme, useStyle, css } = createStitches(config)
 
 	const Card = styled(View, {
 		padding: '$1',
@@ -117,6 +117,64 @@ describe('styled for React Native', () => {
 		})
 
 		expect(seen).toBe('white')
+	})
+
+	test('the same props render the same style object, so React Native can skip the diff', () => {
+		let tree: renderer.ReactTestRenderer | undefined
+		const element = (testID: string) => React.createElement(Provider, { viewport: { width: 400, height: 800 } }, React.createElement(Card, { size: 'large', testID }))
+
+		const styleOf = (rendered: renderer.ReactTestRenderer | undefined): unknown => {
+			const json = rendered?.toJSON()
+			if (!json || Array.isArray(json)) throw new Error('expected one host element')
+			return json.props.style
+		}
+
+		renderer.act(() => {
+			tree = renderer.create(element('first'))
+		})
+		const first = styleOf(tree)
+		renderer.act(() => tree?.update(element('second')))
+
+		expect(styleOf(tree)).toBe(first)
+	})
+
+	test('a viewport change re-resolves, and going back returns the first object again', () => {
+		const styleAt = (width: number) => hostProps(React.createElement(Provider, { viewport: { width, height: 800 } }, React.createElement(Card, { size: { '@tablet': 'large' } }))).style
+
+		const narrow = styleAt(400)
+		const wide = styleAt(900)
+
+		expect(narrow).toEqual({ padding: 4, backgroundColor: 'white' })
+		expect(wide).toEqual({ padding: 8, backgroundColor: 'white' })
+		expect(styleAt(500)).toBe(narrow)
+	})
+
+	test('useStyle resolves a css() function under the nearest provider, with no component of its own', () => {
+		const panel = css({ padding: '$1', backgroundColor: '$background', variants: { size: { large: { padding: '$2' } } } })
+		const dark = createTheme({ colors: { background: 'black' } })
+		const seen: unknown[] = []
+
+		const Panel = (props: { size?: 'large' }) => {
+			const style = useStyle(panel, { size: props.size })
+			seen.push(style)
+			return React.createElement('View', { style })
+		}
+
+		const element = (size?: 'large') => React.createElement(Provider, { theme: dark, viewport: { width: 400, height: 800 } }, React.createElement(Panel, { size }))
+
+		expect(hostProps(element('large')).style).toEqual({ padding: 8, backgroundColor: 'black' })
+		hostProps(element('large'))
+		expect(seen[1]).toBe(seen[0])
+	})
+
+	test('useStyle accepts a style function from another instance, under this provider theme', () => {
+		const other = createStitches({ theme: { colors: { background: 'white' } } })
+		const foreign = other.css({ backgroundColor: '$background' })
+		const dark = createTheme({ colors: { background: 'black' } })
+
+		const Probe = () => React.createElement('View', { style: useStyle(foreign) })
+
+		expect(hostProps(React.createElement(Provider, { theme: dark }, React.createElement(Probe))).style).toEqual({ backgroundColor: 'black' })
 	})
 
 	test('the style function behind a component gives the same style without rendering', () => {

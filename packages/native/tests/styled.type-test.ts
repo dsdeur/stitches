@@ -6,7 +6,7 @@ import { createStitches as createPlainStitches } from '../src/index.ts'
 
 const View = (props: { style?: unknown; testID?: string; accessible?: boolean }) => React.createElement('View', props)
 
-const { styled, css } = createStitches({ media: { tablet: '(min-width: 768px)', desktop: '(min-width: 1200px)' } })
+const { styled, css, useStyle } = createStitches({ media: { tablet: '(min-width: 768px)', desktop: '(min-width: 1200px)' } })
 
 const Card = styled(View, { variants: { size: { small: { padding: 4 }, large: { padding: 8 } }, raised: { true: { shadowOpacity: 0.2 } } } })
 
@@ -41,6 +41,14 @@ Card.style({ size: 'huge' })
 const box = css({ variants: { tone: { muted: { opacity: 0.5 } } } })
 const Box = styled(View, box)
 React.createElement(Box, { tone: 'muted' })
+
+// useStyle takes a css() function and its variants, plain or per breakpoint
+const panel = css({ variants: { size: { small: { padding: 4 } } } })
+useStyle(panel, { size: { '@tablet': 'small' } })
+useStyle(panel)
+
+// @ts-expect-error useStyle checks the variants like a call would
+useStyle(panel, { size: 'huge' })
 
 // Without media in the config there are no breakpoint names to use.
 const plain = createPlainStitches({})

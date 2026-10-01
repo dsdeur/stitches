@@ -1,12 +1,17 @@
 import * as React from 'react'
-import type { NativeConfig, StyleObject, ThemeValues, VariantsOf } from '../types.ts'
+import type { NativeConfig, NativeStyle, StyleObject, ThemeValues, VariantsOf } from '../types.ts'
 import type { Viewport } from '../media.ts'
-import { createStyleEngine, type CssArgument, type MediaOf, type Stitches, type StyleFunction } from '../createStitches.ts'
+import type { MediaContext } from '../mediaContext.ts'
+import { createStyleEngine, type CssArgument, type MediaOf, type PropsRecord, type Resolver, type Stitches, type StyleFunction } from '../createStitches.ts'
 
-/** What styled components read while rendering: the theme to resolve tokens with, and the window. */
+/**
+ * What styled components read while rendering: the theme to resolve tokens with, the window, and
+ * which breakpoints hold for it, worked out once by the provider rather than by every component.
+ */
 interface Environment {
 	readonly theme: ThemeValues
 	readonly viewport: Viewport | undefined
+	readonly media: MediaContext
 }
 
 export interface ProviderProps {
@@ -46,9 +51,15 @@ export interface ReactStitches<Media extends string = never> extends Stitches<Me
 	readonly Provider: (props: ProviderProps) => React.ReactElement
 	/** The theme the nearest provider set, with every token resolved to a value. */
 	readonly useTheme: () => ThemeValues
+	/**
+	 * The style a `css()` function gives for these props, under the nearest provider's theme and
+	 * window. No extra component in the tree, so it is the cheapest way to style a hot path:
+	 * `<View style={useStyle(card, { size })} />`.
+	 */
+	readonly useStyle: <Variants>(style: StyleFunction<Variants>, props?: Variants & { readonly css?: StyleObject }) => NativeStyle
 }
 
-const isStyleObject = (value: unknown): value is StyleObject => typeof value === 'object' && value !== null && !Array.isArray(value)
+const isRecord = (value: unknown): value is PropsRecord => typeof value === 'object' && value !== null && !Array.isArray(value)
 
 const isElementType = (value: unknown): value is React.ElementType => typeof value === 'string' || typeof value === 'function' || (typeof value === 'object' && value !== null && '$$typeof' in value)
 
@@ -58,34 +69,35 @@ const isElementType = (value: unknown): value is React.ElementType => typeof val
  */
 export const createStitches = <const Config extends NativeConfig = NativeConfig>(init?: Config): ReactStitches<MediaOf<Config>> => {
 	const engine = createStyleEngine(init ?? {})
-	const Context = React.createContext<Environment>({ theme: engine.theme, viewport: undefined })
+	const Context = React.createContext<Environment>({ theme: engine.theme, viewport: undefined, media: engine.mediaFor(undefined) })
 
 	/** What a styled component wraps and how it styles it, so extending one can reach both. */
 	const styledParts = new WeakMap<object, { readonly type: React.ElementType; readonly style: StyleFunction<unknown> }>()
+
+	/** The engine's resolver for a style function, or a call through its public signature for one from elsewhere. */
+	const toResolver = (style: StyleFunction<unknown>): Resolver => engine.resolverOf(style) ?? ((props, theme) => style(props, theme))
 
 	const styled = <Type extends React.ElementType, const Definitions extends readonly CssArgument[]>(type: Type, ...definitions: Definitions): StyledComponent<Type, VariantsOf<readonly [Type, ...Definitions], MediaOf<Config>>> => {
 		const extended = typeof type === 'object' || typeof type === 'function' ? styledParts.get(type) : undefined
 		const Type: React.ElementType = extended?.type ?? type
 		const style = engine.toStyleFunction(extended ? [extended.style, ...definitions] : definitions)
+		const resolve = toResolver(style)
 		const variantNames = new Set(style.composers.flatMap((composer) => composer.variantNames))
 
 		const Styled = React.forwardRef<React.ComponentRef<Type>, StyledProps<Type, VariantsOf<readonly [Type, ...Definitions], MediaOf<Config>>>>((props, ref) => {
-			const { theme, viewport } = React.useContext(Context)
-			const variants: Record<string, unknown> = {}
-			const forwarded: Record<string, unknown> = {}
-			let overrides: StyleObject | undefined
-			let as: React.ElementType | undefined
-			let passedStyle: unknown
+			const { theme, media } = React.useContext(Context)
+			const source: PropsRecord = isRecord(props) ? props : {}
 
-			for (const [key, value] of Object.entries(props)) {
-				if (key === 'css') overrides = isStyleObject(value) ? value : undefined
-				else if (key === 'as') as = isElementType(value) ? value : undefined
-				else if (key === 'style') passedStyle = value
-				else if (variantNames.has(key)) variants[key] = value
-				else forwarded[key] = value
+			// The resolver reads the variants and `css` straight from the props; everything else but
+			// `as` and `style` is forwarded, so this is the one copy of the props a render makes.
+			const forwarded: Record<string, unknown> = {}
+
+			for (const key in source) {
+				if (key !== 'css' && key !== 'as' && key !== 'style' && !variantNames.has(key)) forwarded[key] = source[key]
 			}
 
-			const resolved = style({ ...variants, css: overrides }, theme, viewport)
+			const resolved = resolve(source, theme, media)
+			const passedStyle = source.style
 
 			// React Native flattens a style array, later entries winning, so a style passed in still wins.
 			forwarded.style = passedStyle === undefined || passedStyle === null ? resolved : [resolved, passedStyle]
@@ -93,7 +105,9 @@ export const createStitches = <const Config extends NativeConfig = NativeConfig>
 			// React 19 treats `ref` as an ordinary prop; only forward one the caller actually gave.
 			if (ref !== null) forwarded.ref = ref
 
-			return React.createElement(as ?? Type, forwarded)
+			const as = source.as
+
+			return React.createElement(isElementType(as) ? as : Type, forwarded)
 		})
 
 		const typeName = typeof Type === 'string' ? Type : (Type.displayName ?? Type.name ?? 'Component')
@@ -105,6 +119,16 @@ export const createStitches = <const Config extends NativeConfig = NativeConfig>
 		return component
 	}
 
+	const useStyle = <Variants>(style: StyleFunction<Variants>, props?: Variants & { readonly css?: StyleObject }): NativeStyle => {
+		const { theme, media } = React.useContext(Context)
+		const resolve = engine.resolverOf(style)
+
+		if (resolve) return resolve(isRecord(props) ? props : {}, theme, media)
+
+		// a style function from another instance: its own path, with this provider's theme
+		return style(props, theme)
+	}
+
 	const Provider = ({ theme, viewport, children }: ProviderProps): React.ReactElement => {
 		const parent = React.useContext(Context)
 		const activeTheme = theme ?? parent.theme
@@ -114,7 +138,11 @@ export const createStitches = <const Config extends NativeConfig = NativeConfig>
 
 		// Keyed on the numbers, so `viewport={useWindowDimensions()}` does not re-render every styled
 		// component below on each render of the provider.
-		const value = React.useMemo<Environment>(() => ({ theme: activeTheme, viewport: width === undefined || height === undefined ? undefined : { width, height } }), [activeTheme, width, height])
+		const value = React.useMemo<Environment>(() => {
+			const size = width === undefined || height === undefined ? undefined : { width, height }
+
+			return { theme: activeTheme, viewport: size, media: engine.mediaFor(size) }
+		}, [activeTheme, width, height])
 
 		return React.createElement(Context.Provider, { value }, children)
 	}
@@ -128,5 +156,6 @@ export const createStitches = <const Config extends NativeConfig = NativeConfig>
 		styled,
 		Provider,
 		useTheme: () => React.useContext(Context).theme,
+		useStyle,
 	}
 }
