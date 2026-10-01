@@ -46,12 +46,12 @@ const pickSimulator = () => {
 }
 
 /**
- * The Release app for the simulator, built with Apple's tools directly: `expo prebuild` writes the
+ * The Release app for the simulator, built with Apple's tools directly: `expo prebuild --clean` writes the
  * iOS project and installs its pods, xcodebuild builds it, and the JS bundle is made in the build's
  * own bundling phase, which sees BENCH_COMPILER from the environment.
  */
 const buildApp = (device, env) => {
-	run('npx', ['expo', 'prebuild', '--platform', 'ios'], { ...env, CI: '1' })
+	run('npx', ['expo', 'prebuild', '--clean', '--platform', 'ios'], { ...env, CI: '1' })
 
 	const ios = join(here, 'ios')
 	const workspace = readdirSync(ios).find((entry) => entry.endsWith('.xcworkspace'))

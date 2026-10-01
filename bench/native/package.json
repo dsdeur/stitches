@@ -11,12 +11,12 @@
   },
   "dependencies": {
     "@stitches/native": "file:./.stitches/native",
-    "expo": "~54.0.37",
-    "react": "19.1.0",
-    "react-native": "0.81.5"
+    "expo": "~57.0.26",
+    "react": "19.2.3",
+    "react-native": "0.86.3"
   },
   "devDependencies": {
     "@stitches/native-babel": "file:./.stitches/native-babel",
-    "babel-preset-expo": "~54.0.12"
+    "babel-preset-expo": "~57.0.13"
   }
 }
