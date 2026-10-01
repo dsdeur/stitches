@@ -5,7 +5,7 @@
 //   SIMULATOR="iPhone 17" node run.mjs          # a specific simulator; the first iPhone otherwise
 //   IOS=26 node run.mjs                         # only simulators of that iOS version
 //   MODES=off node run.mjs                      # only one React Compiler mode
-//   PROFILE=1 node run.mjs                      # one Hermes sampling profile per scenario instead of timings
+//   MICRO=1 node run.mjs                        # time the pieces of a styled element on Hermes instead (src/micro.js)
 //
 // Release, because a Debug build runs development React and unoptimized native code, which would
 // distort every number here. Results land in results/<mode>.json as well.
@@ -122,9 +122,9 @@ const serveLaunch = (config, timeoutMs) => {
 }
 
 /** Runs one scenario in a fresh process of the installed app and returns its samples. */
-const runScenario = async (device, implementation, profile) => {
+const runScenario = async (device, config) => {
 	terminate(device)
-	const { results, watch } = serveLaunch({ implementation, profile }, 10 * 60 * 1000)
+	const { results, watch } = serveLaunch(config, 10 * 60 * 1000)
 	// prints "dev.stitches.bench: <pid>"
 	const launched = execFileSync('xcrun', ['simctl', 'launch', device.udid, 'dev.stitches.bench'], { encoding: 'utf8' }).trim()
 	watch(Number(launched.split(': ').pop()))
@@ -195,14 +195,10 @@ for (const mode of modes) {
 	terminate(device)
 	run('xcrun', ['simctl', 'install', device.udid, app])
 
-	if (process.env.PROFILE) {
-		for (const name of scenarios) {
-			const trace = join(here, 'results', `${mode}-${name}.hermes.json`)
-			rmSync(trace, { force: true })
-			const received = await runScenario(device, name, trace)
-			if (!received.profiled) throw new Error(`no sampling profiler in this Hermes; HermesInternal has: ${received.hermes.join(', ')}`)
-			console.log(`  ${name}: ${existsSync(trace) ? trace : 'the app reported a profile, but no file was written'}`)
-		}
+	if (process.env.MICRO) {
+		const { micro } = await runScenario(device, { micro: true })
+		console.log(`\nReact Compiler ${mode}: ns per element on Hermes, median of ${micro.passes} passes of ${micro.iterations}`)
+		for (const [name, ns] of Object.entries(micro.results)) console.log(`  ${ns.toFixed(0).padStart(6)} ns  ${name}`)
 		continue
 	}
 
@@ -211,7 +207,7 @@ for (const mode of modes) {
 	for (const pass of passes) {
 		for (const name of pass) {
 			console.log(`  running ${name}`)
-			const received = await runScenario(device, name)
+			const received = await runScenario(device, { implementation: name })
 			count = received.count
 			for (const operation of operations) samples[name][operation].push(...received.samples[operation])
 		}

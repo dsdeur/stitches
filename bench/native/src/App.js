@@ -15,6 +15,7 @@ import * as stylesheet from './stylesheet'
 import * as styled from './styled'
 import * as useStyle from './useStyle'
 import * as compiled from './compiled'
+import { runMicro } from './micro'
 
 const implementations = { none, stylesheet, styled, useStyle, compiled }
 const runner = 'http://localhost:8799'
@@ -88,17 +89,18 @@ export const App = () => {
 		started.current = true
 
 		const run = async () => {
-			const { implementation, profile } = await (await fetch(`${runner}/config`)).json()
+			const { implementation, micro } = await (await fetch(`${runner}/config`)).json()
+			if (micro) {
+				setStatus('timing the pieces of a styled element')
+				await fetch(`${runner}/results`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ micro: runMicro() }) })
+				setStatus('done')
+				return
+			}
 			if (!(implementation in implementations)) throw new Error(`unknown scenario ${implementation}`)
 			const samples = { mount: [], update: [], theme: [] }
 
-			// Hermes' sampling profiler, over the measured rounds only, when the runner asks for a profile
-			const hermes = globalThis.HermesInternal
-			const profiling = Boolean(profile && hermes?.enableSamplingProfiler && hermes.dumpSampledTraceToFile)
-
 			for (let round = 0; round < rounds; round++) {
 				setStatus(`${implementation}: round ${round + 1} of ${rounds}`)
-				if (round === 1 && profiling) hermes.enableSamplingProfiler()
 				const record = (operation, timing) => {
 					if (round > 0) samples[operation].push(timing)
 				}
@@ -109,13 +111,8 @@ export const App = () => {
 				await measure((previous) => ({ ...previous, implementation: null }))
 			}
 
-			if (profiling) {
-				hermes.disableSamplingProfiler()
-				hermes.dumpSampledTraceToFile(profile)
-			}
-
 			setStatus('posting results')
-			await fetch(`${runner}/results`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ implementation, count, samples, profiled: profiling ? profile : null, hermes: Object.keys(hermes ?? {}) }) })
+			await fetch(`${runner}/results`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ implementation, count, samples }) })
 			setStatus('done')
 		}
 
