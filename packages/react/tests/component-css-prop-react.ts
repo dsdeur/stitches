@@ -1,30 +1,19 @@
+// @vitest-environment jsdom
 import * as React from 'react'
-import * as renderer from 'react-test-renderer'
 
 import { createStitches } from '../src/index.ts'
+import { render } from './helpers/render.ts'
 
-const RenderOf = (element: React.ReactElement) => {
-	let Rendered: renderer.ReactTestRenderer | undefined
-
-	void renderer.act(() => {
-		Rendered = renderer.create(element)
-	})
-
-	if (Rendered === undefined) throw new Error('Rendered is undefined')
-	return Rendered.toJSON()
-}
+const RenderOf = (element: React.ReactElement): string => render(element).container.innerHTML
 
 describe('React Component with CSS prop', () => {
 	test('ABC', () => {
-		expect(RenderOf(React.createElement('div', { className: 'foobar' }, 'hello'))).toEqual({
-			type: 'div',
-			props: { className: 'foobar' },
-			children: ['hello'],
-		})
+		expect(RenderOf(React.createElement('div', { className: 'foobar' }, 'hello'))).toBe('<div class="foobar">hello</div>')
 	})
 
 	test('XYZ', () => {
 		const { styled, toString } = createStitches({
+			root: null,
 			media: {
 				bp2: '(min-width: 900px)',
 			},
@@ -38,11 +27,7 @@ describe('React Component with CSS prop', () => {
 			display: 'block',
 		})
 
-		expect(RenderOf(React.createElement(StyledText, null, 'Radix UI test suite'))).toEqual({
-			type: 'span',
-			props: { className: 'c-bMUtqP' },
-			children: ['Radix UI test suite'],
-		})
+		expect(RenderOf(React.createElement(StyledText, null, 'Radix UI test suite'))).toBe('<span class="c-bMUtqP">Radix UI test suite</span>')
 
 		expect(toString()).toBe('--sxs{--sxs:2 c-bMUtqP}@media{.c-bMUtqP{line-height:1;margin:0;font-weight:400;font-variant-numeric:tabular-nums;display:block}}')
 
@@ -79,13 +64,7 @@ describe('React Component with CSS prop', () => {
 					},
 				}, 'Radix UI test suite'),
 			),
-		).toEqual({
-			type: 'span',
-			props: {
-				className: 'c-bMUtqP c-bMUtqP-ieTXEfC-css',
-			},
-			children: ['Radix UI test suite'],
-		})
+		).toBe('<span class="c-bMUtqP c-bMUtqP-ieTXEfC-css">Radix UI test suite</span>')
 
 		expect(toString()).toBe(
 			`--sxs{--sxs:2 c-bMUtqP}@media{.c-bMUtqP{line-height:1;margin:0;font-weight:400;font-variant-numeric:tabular-nums;display:block}}--sxs{--sxs:6 c-bMUtqP-ieTXEfC-css}@media{.c-bMUtqP-ieTXEfC-css{font-weight:500;font-variant-numeric:proportional-nums;line-height:35px;text-align:center;margin-bottom:var(--space-3)}@media (min-width: 900px){.c-bMUtqP-ieTXEfC-css{line-height:55px;color:red}}}`,
@@ -98,13 +77,7 @@ describe('React Component with CSS prop', () => {
 			},
 		})
 
-		expect(RenderOf(React.createElement(Link, null, 'Radix UI test suite'))).toEqual({
-			type: 'a',
-			props: {
-				className: 'c-dnnagC',
-			},
-			children: ['Radix UI test suite'],
-		})
+		expect(RenderOf(React.createElement(Link, null, 'Radix UI test suite'))).toBe('<a class="c-dnnagC">Radix UI test suite</a>')
 
 		expect(toString()).toBe(
 			`--sxs{--sxs:2 c-bMUtqP c-dnnagC}@media{.c-bMUtqP{line-height:1;margin:0;font-weight:400;font-variant-numeric:tabular-nums;display:block}.c-dnnagC .c-bMUtqP{color:inherit}}--sxs{--sxs:6 c-bMUtqP-ieTXEfC-css}@media{.c-bMUtqP-ieTXEfC-css{font-weight:500;font-variant-numeric:proportional-nums;line-height:35px;text-align:center;margin-bottom:var(--space-3)}@media (min-width: 900px){.c-bMUtqP-ieTXEfC-css{line-height:55px;color:red}}}`,

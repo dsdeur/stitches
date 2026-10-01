@@ -88,7 +88,7 @@ What each dev dependency is really for, and the verdict:
 | Lint | `eslint` 7, `@typescript-eslint/*` 5 | **Done 2026-09-05:** replaced by oxlint (`.oxlintrc.json`). |
 | Package hygiene | `@skypack/package-check` | **Done 2026-09-05:** replaced by publint (`yarn lint:pkg`, runs after build). |
 | Type generation | `csstype` | Keep. `types/css.d.ts` is generated from it by `.task/build-csstype.js`. |
-| React tests | `react` 17, `react-test-renderer` 17, `@types/react*` 17 | **Done 2026-09-05:** on 19. `react-test-renderer` 19 is deprecated but still published and still works, so the test suite is unchanged rather than rewritten onto `react-dom` under jsdom; that migration is still open. The upgrade found one real incompatibility, below. |
+| React tests | `react` 17, `react-test-renderer` 17, `@types/react*` 17 | **Done 2026-09-05:** on 19. The upgrade found one real incompatibility, below. **2026-10-01:** the react package's tests render through `react-dom` under jsdom; `react-test-renderer` remains only for the native package's component tests (task 2 in section 8). |
 | Core | `typescript`, `prettier`, `@types/node` | Keep. Bump `@types/node` to the chosen Node version. |
 
 ### Build: tsdown (or tsup), not Vite
@@ -271,6 +271,36 @@ process-global sheet that accumulates rules across requests.
 
 Packaging: `@stitches/compiler` (or `static`) with a Vite/Next plugin. No core API change.
 
+**Shipped 2026-09-30: `packages/static`.** `extractCss(stitches, sources, { responsive })` walks module
+namespaces or values, renders every component through the instance's own `css()` (so a `styled()`
+component, which cannot be called outside React, produces the same classes and group positions),
+and returns `getCssText()`. Per component it renders the defaults, every variant value, every
+compound variant, and, unless `responsive: false`, each of those at every `config.media` key.
+Themes, `globalCss()` and `keyframes()` results are recognised by shape and rendered. Step 4 above
+needed no new code: the runtime already hydrates from any same-origin stylesheet carrying `--sxs`
+markers, so a `<link>` to the file is enough. `yarn test:browser` checks exactly that, in both
+cascades: after the page loads the file, rendering a variant from it adds no style rule anywhere.
+
+What stays at runtime, and is documented in the package README: `css` props, a value placed at two
+breakpoints at once, a compound whose conditions hold at different breakpoints, components the walk
+does not reach, and every rule when the file is cross-origin (the CSSOM of a cross-origin sheet is
+unreadable). Under `'legacy'` the file's order is the extractor's visiting order, not the pages'
+render order, so the README recommends `'declared'`.
+
+Not built yet, each its own piece: a Vite plugin (load the style modules with `ssrLoadModule`, emit
+the file as an asset), and a strict mode that fails the build when a render would inject at runtime.
+
+**Shipped 2026-10-01: `bundleCss`.** The same extraction as plain css (markers and `@media{}` groups
+removed, rules and order unchanged) followed by the utility classes of 5.2 A, as one file to cache or
+to inline into a single html page with no runtime. `yarn test:browser` checks such a page with one
+`<style>` and no script: component, variant, a utility overriding a component, a breakpoint utility
+and a theme switch all resolve.
+
+Next, recorded 2026-10-01 as the direction for this package: **above-the-fold css.** Given the html
+of a page (or of its first viewport), keep only the rules whose classes appear there, inline those,
+and load the rest of the bundle later. The plain bundle makes this a filter over rules by class
+name; the work is deciding what "above the fold" means for a page, which needs a rendered page.
+
 ### 5.2 Utility class stylesheet (for agents writing HTML)
 
 Goal: a stylesheet with readable utility class names that reuses our tokens and themes, so
@@ -286,6 +316,12 @@ Two designs, both viable:
 - **B. Atomic output mode for the component runtime** (one class per declaration, like
   stylex). Constraint: selector-based targeting (`Comp.selector`, `${Comp} &`, descendant
   selectors that assume one class per component) is unavailable in that mode.
+
+Decision (2026-10-01): **both.** A shipped as part of `@stitches/static` (`utilityClasses`,
+`utilityCss`, and in `bundleCss`): one class per token per `themeMap` property, named after the css
+property (`padding-2`, `background-color-primary`), breakpoints as `tablet:` prefixes and opt-in
+states, valued by the token's custom property so themes switch them. B, the atomic output mode for
+components, is next and separate: it changes how core renders, so it is an opt-in config flag.
 
 Decision note (2026-09-05): the usage constraint in B is acceptable ("components must be
 used a certain way, same as `li` in `ul`"). So B is not ruled out. Open question: which
@@ -452,7 +488,7 @@ list; it now points here. Items marked done stay for context.
    (`.task/release.js`) is removed: we do not publish to npm. Still open: choosing the first version
    (packages are at `1.3.1-1`) and pushing the tag.
 2. Toolchain replacement (section 2b): Vitest, then tsdown, then eslint flat config +
-   publint, then React 19 for tests. Vitest, tsdown, oxlint, publint and React 19 done 2026-09-05; moving the react tests off the deprecated react-test-renderer remains. May run in parallel with 3 to 5; runtime PRs open at
+   publint, then React 19 for tests. Vitest, tsdown, oxlint, publint and React 19 done 2026-09-05. The react package's tests moved off the deprecated react-test-renderer on 2026-10-01: they render through react-dom in jsdom (pinned to 27.4.0: the current 30.x pulls in a dependency that requires Node 22.22.2 or newer), via `packages/react/tests/helpers/render.ts`. Stitches keeps its mock sheet there (`root: null`), because jsdom's CSS parser rejects the `--sxs{…}` marker real browsers accept; `yarn test:browser` covers the real document. react-test-renderer stays a dev dependency only for `@stitches/native`'s component tests, whose React Native host elements carry style objects and arrays that react-dom would turn into DOM attributes. May run in parallel with 3 to 5; runtime PRs open at
    the same time rebase onto it.
 3. Precompute variant hashes (3.4 item 1). Done 2026-09-05, PR #1.
 4. Deterministic sheet order (10.1 A; subsumes the cascade-layers item in section 4).
@@ -473,8 +509,10 @@ list; it now points here. Items marked done stay for context.
    slowness it was meant to fix does not reproduce on TypeScript 6 (see 10.2 and
    `docs/bench/type-perf/`).
 9. Composite border tokens via multi-scale `themeMap` (6.1). Done 2026-09-05.
-10. Static extraction (5.1).
-11. Utility sheet (5.2), after deciding A vs B vs both.
+10. Static extraction (5.1). `@stitches/static` shipped 2026-09-30 as a function a build script calls;
+    a Vite plugin and a strict mode are the follow-ups.
+11. Utility sheet (5.2): both. A shipped 2026-10-01 in `@stitches/static` (`bundleCss`, utilities);
+    B (atomic component output) is next, behind an opt-in flag.
 12. Native adapter (5.3), after settling the shared vocabulary.
 
 ## 9. Open questions
