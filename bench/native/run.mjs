@@ -3,6 +3,7 @@
 //
 //   cd bench/native && node run.mjs            # needs a built repo: yarn build at the root
 //   SIMULATOR="iPhone 17" node run.mjs          # a specific simulator; the first iPhone otherwise
+//   IOS=26 node run.mjs                         # only simulators of that iOS version
 //   MODES=off node run.mjs                      # only one React Compiler mode
 //
 // Release, because a Debug build runs development React and unoptimized native code, which would
@@ -36,11 +37,11 @@ const syncPackages = () => {
 const pickSimulator = () => {
 	const { devices } = JSON.parse(execFileSync('xcrun', ['simctl', 'list', 'devices', 'available', '-j'], { encoding: 'utf8' }))
 	const all = Object.entries(devices)
-		.filter(([runtime]) => runtime.includes('iOS'))
+		.filter(([runtime]) => runtime.includes(process.env.IOS ? `iOS-${process.env.IOS}-` : 'iOS'))
 		.flatMap(([, list]) => list)
 	const wanted = process.env.SIMULATOR
 	const device = wanted ? all.find((candidate) => candidate.name === wanted || candidate.udid === wanted) : all.reverse().find((candidate) => candidate.name.startsWith('iPhone'))
-	if (!device) throw new Error(`no simulator ${wanted ?? 'iPhone'} available`)
+	if (!device) throw new Error(`no simulator ${wanted ?? 'iPhone'}${process.env.IOS ? ` on iOS ${process.env.IOS}` : ''} available`)
 	if (device.state !== 'Booted') execFileSync('xcrun', ['simctl', 'boot', device.udid])
 	return device
 }
@@ -73,26 +74,43 @@ const terminate = (device) => {
 	}
 }
 
-/** Waits for the app to post its results. */
-const receiveResults = (timeoutMs) =>
-	new Promise((resolve, reject) => {
+/** A simulator app is a process on this Mac, so whether it still runs is a signal-0 check. */
+const isRunning = (pid) => {
+	try {
+		process.kill(pid, 0)
+		return true
+	} catch {
+		return false
+	}
+}
+
+/** Waits for the app to post its results, and stops waiting when the app exits without doing so. */
+const receiveResults = (timeoutMs) => {
+	let watchedPid
+	const results = new Promise((resolve, reject) => {
+		const finish = (settle, value) => {
+			server.close()
+			clearTimeout(timer)
+			clearInterval(watch)
+			settle(value)
+		}
 		const server = createServer((request, response) => {
 			let body = ''
 			request.on('data', (chunk) => (body += chunk))
 			request.on('end', () => {
 				response.end('ok')
-				server.close()
-				clearTimeout(timer)
 				const parsed = JSON.parse(body)
-				parsed.error ? reject(new Error(parsed.error)) : resolve(parsed)
+				parsed.error ? finish(reject, new Error(parsed.error)) : finish(resolve, parsed)
 			})
 		})
-		const timer = setTimeout(() => {
-			server.close()
-			reject(new Error('no results within the timeout'))
-		}, timeoutMs)
+		const timer = setTimeout(() => finish(reject, new Error('no results within the timeout')), timeoutMs)
+		const watch = setInterval(() => {
+			if (watchedPid && !isRunning(watchedPid)) finish(reject, new Error('the app exited before posting results: see ~/Library/Logs/DiagnosticReports'))
+		}, 2000)
 		server.listen(8799)
 	})
+	return { results, watch: (pid) => (watchedPid = pid) }
+}
 
 const format = (ms) => ms.toFixed(2).padStart(7)
 
