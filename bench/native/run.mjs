@@ -64,6 +64,15 @@ const buildApp = (device, env) => {
 	return join(derivedData, 'Build/Products/Release-iphonesimulator', `${scheme}.app`)
 }
 
+/** Stops the app if it is running; simctl reports an error when it is not, which is fine here. */
+const terminate = (device) => {
+	try {
+		execFileSync('xcrun', ['simctl', 'terminate', device.udid, 'dev.stitches.bench'], { stdio: 'ignore' })
+	} catch {
+		// not running
+	}
+}
+
 /** Waits for the app to post its results. */
 const receiveResults = (timeoutMs) =>
 	new Promise((resolve, reject) => {
@@ -121,12 +130,12 @@ for (const mode of modes) {
 
 	// installed and launched with simctl, which needs no Simulator window: the run works over SSH
 	const results = receiveResults(15 * 60 * 1000)
-	execFileSync('xcrun', ['simctl', 'terminate', device.udid, 'dev.stitches.bench'], { stdio: 'ignore' })
+	terminate(device)
 	run('xcrun', ['simctl', 'install', device.udid, app])
 	run('xcrun', ['simctl', 'launch', device.udid, 'dev.stitches.bench'])
 
 	const received = await results
-	execFileSync('xcrun', ['simctl', 'terminate', device.udid, 'dev.stitches.bench'], { stdio: 'ignore' })
+	terminate(device)
 	writeFileSync(join(here, 'results', `${mode}.json`), `${JSON.stringify(received, null, 2)}\n`)
 	report(mode, received)
 }
